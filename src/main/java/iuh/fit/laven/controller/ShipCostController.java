@@ -27,7 +27,7 @@ public class ShipCostController {
     }
 
     @GetMapping("/staff/ship-costs/{shipCostId}")
-    public ShipCost getShipCost(@PathVariable String shipCostId) {
+    public ShipCost getShipCost(@PathVariable int shipCostId) {
         return shipCostService.findById(shipCostId);
     }
 
@@ -38,7 +38,7 @@ public class ShipCostController {
 
     @PutMapping("/staff/ship-costs/{shipCostId}")
     public ShipCost updateShipCost(
-        @PathVariable String shipCostId,
+        @PathVariable int shipCostId,
         @Valid @RequestBody ShipCost shipCost
     ) {
         return shipCostService.update(shipCostId, shipCost);

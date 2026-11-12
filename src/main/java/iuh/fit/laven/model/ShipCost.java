@@ -17,8 +17,8 @@ import lombok.Setter;
 @AllArgsConstructor
 public class ShipCost {
     @Id
-    @Column(length = 6, updatable = false)
-    private String shipCostId;
+    @Column(nullable = false, updatable = false)
+    private int shipCostId;
 
     @NotBlank
     @Column(nullable = false, unique = true, length = 100)

@@ -27,7 +27,7 @@ public class ShipCostService {
     }
 
     @Transactional(readOnly = true)
-    public ShipCost findById(String id) {
+    public ShipCost findById(int id) {
         return shipCostRepository.findById(id).orElseThrow(this::notFound);
     }
 
@@ -37,7 +37,7 @@ public class ShipCostService {
     }
 
     public ShipCost create(ShipCost shipCost) {
-        if (shipCost.getShipCostId() != null) {
+        if (shipCost.getShipCostId() != 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mã phí ship do hệ thống sinh");
         }
         if (shipCostRepository.findByCityIgnoreCase(shipCost.getCity()).isPresent()) {
@@ -47,7 +47,7 @@ public class ShipCostService {
         return shipCostRepository.save(shipCost);
     }
 
-    public ShipCost update(String id, ShipCost request) {
+    public ShipCost update(int id, ShipCost request) {
         ShipCost shipCost = findById(id);
         if (!shipCost.getCity().equalsIgnoreCase(request.getCity())
             && shipCostRepository.existsByCityIgnoreCaseAndShipCostIdNot(request.getCity(), id)) {
@@ -58,14 +58,12 @@ public class ShipCostService {
         return shipCostRepository.save(shipCost);
     }
 
-    private String nextShipCostId() {
-        int maxId = shipCostRepository.findAll().stream()
+    private int nextShipCostId() {
+        return shipCostRepository.findAll().stream()
             .map(ShipCost::getShipCostId)
-            .filter(id -> id != null && id.matches("SHP\\d{3}"))
-            .map(id -> Integer.parseInt(id.substring(3)))
+            .filter(id -> id != null)
             .max(Integer::compareTo)
-            .orElse(0);
-        return "SHP" + String.format("%03d", maxId + 1);
+            .orElse(0) + 1;
     }
 
     private ResponseStatusException notFound() {
