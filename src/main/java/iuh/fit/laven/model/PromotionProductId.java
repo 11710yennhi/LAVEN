@@ -21,6 +21,6 @@ public class PromotionProductId implements Serializable {
     @Column(length = 19, nullable = false)
     private String promotionId;
 
-    @Column(length = 19, nullable = false)
+    @Column(length = 20, nullable = false)
     private String productId;
 }

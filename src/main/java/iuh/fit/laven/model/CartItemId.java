@@ -21,7 +21,7 @@ public class CartItemId implements Serializable {
     @Column(length = 19, nullable = false)
     private String cartId;
 
-    @Column(length = 19, nullable = false)
+    @Column(length = 20, nullable = false)
     private String variantId;
 
     @Column(length = 7, nullable = false)
