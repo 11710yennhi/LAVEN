@@ -84,7 +84,7 @@ public class Product {
         if (category == null || originalPrice == null || category.getPackagingCost() == null) {
             return null;
         }
-        double rawPrice = (originalPrice + category.getPackagingCost()) / 0.70d;
-        return (int) (Math.ceil(rawPrice / 1000d) * 1000);
+        long rawPrice = (long) originalPrice + category.getPackagingCost();
+        return Math.toIntExact(Math.ceilDiv(rawPrice, 700L) * 1_000L);
     }
 }
