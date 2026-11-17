@@ -37,14 +37,33 @@ public class ProductService {
     public List<Product> search(String keyword, String categoryId, String brand,
                                 String material, String size, String colorId,
                                 Integer minPrice, Integer maxPrice, boolean includeInactive) {
+        return search(keyword, null, null, categoryId, brand, null, material, size, colorId,
+                      minPrice, maxPrice, null, null, null, includeInactive);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Product> search(String keyword, String productId, String productName,
+                                String categoryId, String brand, String origin,
+                                String material, String size, String colorId,
+                                Integer minPrice, Integer maxPrice,
+                                Integer minOriginalPrice, Integer maxOriginalPrice,
+                                Boolean status, boolean includeInactive) {
         if ((minPrice != null && minPrice < 0)
             || (maxPrice != null && maxPrice < 0)
             || (minPrice != null && maxPrice != null && minPrice > maxPrice)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Khoảng giá không hợp lệ");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Khoảng giá bán không hợp lệ");
+        }
+        if ((minOriginalPrice != null && minOriginalPrice < 0)
+            || (maxOriginalPrice != null && maxOriginalPrice < 0)
+            || (minOriginalPrice != null && maxOriginalPrice != null && minOriginalPrice > maxOriginalPrice)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Khoảng giá gốc không hợp lệ");
         }
 
-        return productRepository.search(blank(keyword), blank(categoryId), blank(brand),
-                blank(material), includeInactive)
+        return productRepository.search(
+                blank(keyword), blank(productId), blank(productName),
+                blank(categoryId), blank(brand), blank(origin),
+                blank(material), minOriginalPrice, maxOriginalPrice,
+                status, includeInactive)
             .stream()
             .filter(product -> matchesSize(product, size))
             .filter(product -> matchesColor(product, colorId))

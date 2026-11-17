@@ -23,6 +23,11 @@ public class ColorService {
         return colorRepository.findAllByOrderByNameAsc();
     }
 
+    @Transactional(readOnly = true)
+    public List<Color> search(String keyword, String colorId, String name) {
+        return colorRepository.search(blank(keyword), blank(colorId), blank(name));
+    }
+
     public Color create(Color color) {
         if (color.getColorId() == null || !color.getColorId().matches("^#[0-9A-Fa-f]{6}$")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mã màu phải là HEX, ví dụ #093F69");
@@ -40,5 +45,9 @@ public class ColorService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Màu sắc không tồn tại"));
         color.setName(request.getName());
         return colorRepository.save(color);
+    }
+
+    private String blank(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

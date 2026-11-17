@@ -16,14 +16,27 @@ public class ShipCostController {
         this.shipCostService = shipCostService;
     }
 
+    @GetMapping("/public/ship-costs")
+    public List<ShipCost> searchPublicShipCosts(
+        @RequestParam(required = false) String city,
+        @RequestParam(required = false) Integer minPriceShip,
+        @RequestParam(required = false) Integer maxPriceShip
+    ) {
+        return shipCostService.search(city, minPriceShip, maxPriceShip);
+    }
+
     @GetMapping("/public/ship-costs/{city}")
     public ShipCost getPublicShipCost(@PathVariable String city) {
         return shipCostService.findByCity(city);
     }
 
     @GetMapping("/staff/ship-costs")
-    public List<ShipCost> getShipCosts() {
-        return shipCostService.findAll();
+    public List<ShipCost> getShipCosts(
+        @RequestParam(required = false) String city,
+        @RequestParam(required = false) Integer minPriceShip,
+        @RequestParam(required = false) Integer maxPriceShip
+    ) {
+        return shipCostService.search(city, minPriceShip, maxPriceShip);
     }
 
     @GetMapping("/staff/ship-costs/{shipCostId}")

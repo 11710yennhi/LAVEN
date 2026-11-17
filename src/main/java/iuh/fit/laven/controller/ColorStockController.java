@@ -15,14 +15,43 @@ public class ColorStockController {
         this.colorStockService = colorStockService;
     }
 
+    @GetMapping("/public/stocks")
+    public List<ColorStock> searchPublicStocks(
+        @RequestParam(required = false) String productId,
+        @RequestParam(required = false) String productName,
+        @RequestParam(required = false) String variantId,
+        @RequestParam(required = false) String size,
+        @RequestParam(required = false) String colorId,
+        @RequestParam(required = false) String colorName,
+        @RequestParam(required = false) Integer minStock,
+        @RequestParam(required = false) Integer maxStock
+    ) {
+        return colorStockService.search(
+            productId, productName, variantId, size,
+            colorId, colorName, minStock, maxStock, false
+        );
+    }
+
     @GetMapping("/public/products/{productId}/stocks")
     public List<ColorStock> getPublicStocks(@PathVariable String productId) {
         return colorStockService.findByProduct(productId, false);
     }
 
     @GetMapping("/staff/stocks")
-    public List<ColorStock> getStocks(@RequestParam String productId) {
-        return colorStockService.findByProduct(productId, true);
+    public List<ColorStock> getStocks(
+        @RequestParam(required = false) String productId,
+        @RequestParam(required = false) String productName,
+        @RequestParam(required = false) String variantId,
+        @RequestParam(required = false) String size,
+        @RequestParam(required = false) String colorId,
+        @RequestParam(required = false) String colorName,
+        @RequestParam(required = false) Integer minStock,
+        @RequestParam(required = false) Integer maxStock
+    ) {
+        return colorStockService.search(
+            productId, productName, variantId, size,
+            colorId, colorName, minStock, maxStock, true
+        );
     }
 
     @GetMapping("/staff/stocks/low-stock")

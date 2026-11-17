@@ -30,6 +30,11 @@ public class ProductImageService {
         return imageRepository.findByProductProductId(productId);
     }
 
+    @Transactional(readOnly = true)
+    public List<ProductImage> search(String productId, String productName, String productImageId) {
+        return imageRepository.search(blank(productId), blank(productName), blank(productImageId));
+    }
+
     public ProductImage create(String productId, ProductImage image) {
         image.setProduct(requireProduct(productId, false));
         image.setProductImageId(nextImageId());
@@ -41,6 +46,10 @@ public class ProductImageService {
             .orElseThrow(() -> notFound("Ảnh sản phẩm"));
         image.setImageUrl(request.getImageUrl());
         return imageRepository.save(image);
+    }
+
+    private String blank(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private Product requireProduct(String id, boolean includeInactive) {
