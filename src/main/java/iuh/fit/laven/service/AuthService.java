@@ -82,16 +82,12 @@ public class AuthService {
         pendingRegistrationRepository.flush();
 
         String token = TokenHasher.generateToken();
-        PendingRegistration pending = PendingRegistration.builder()
-                .tokenHash(TokenHasher.hash(token))
-                .email(email)
-                .phone(phone)
-                .passwordHash(passwordEncoder.encode(request.getPassword()))
-                .fullName(fullName)
-                .dateOfBirth(dateOfBirth)
-                .gender(gender)
-                .expiresAt(LocalDateTime.now().plusMinutes(VERIFY_EXPIRE_MINUTES))
-                .build();
+        LocalDateTime now = LocalDateTime.now();
+        PendingRegistration pending = new PendingRegistration(
+                TokenHasher.hash(token), email, phone,
+                passwordEncoder.encode(request.getPassword()), fullName,
+                dateOfBirth, gender,
+                now.plusMinutes(VERIFY_EXPIRE_MINUTES), now);   // expiresAt = createdAt + 30 phút
         pendingRegistrationRepository.save(pending);
 
         emailService.sendVerificationEmail(email, token);
@@ -115,22 +111,18 @@ public class AuthService {
             throw new AppException(HttpStatus.CONFLICT, "Email đã được sử dụng");
         }
 
-        User user = User.builder()
-                .userId(IdGenerator.nextUnique("USR", userRepository::existsById))
-                .email(pending.getEmail())
-                .phone(pending.getPhone())
-                .passwordHash(pending.getPasswordHash())
-                .fullName(pending.getFullName())
-                .role(UserRole.CUSTOMER)
-                .dateOfBirth(pending.getDateOfBirth())
-                .gender(pending.getGender())
-                .build(); // status = true, pendingLock = false, failedLoginAttempts = 0 (mặc định trong entity)
+        // Quy trình 1 bước 6: CUSTOMER, status = true, pendingLock = false, failedLoginAttempts = 0
+        User user = new User(
+                IdGenerator.nextUnique("USR", userRepository::existsById),
+                pending.getEmail(), pending.getPhone(), pending.getPasswordHash(), pending.getFullName(),
+                null, null, null,                 // addressLine, ward, city
+                UserRole.CUSTOMER, true,          // role, status
+                pending.getDateOfBirth(), pending.getGender(),
+                null, null, null,                 // hireDate, lockedDate, lockedReason
+                false, null, 0, null);
         userRepository.save(user);
 
-        Cart cart = Cart.builder()
-                .cartId(IdGenerator.nextUnique("CRT", cartRepository::existsById))
-                .customer(user)
-                .build();
+        Cart cart = new Cart(IdGenerator.nextUnique("CRT", cartRepository::existsById), user);
         cartRepository.save(cart);
 
         pendingRegistrationRepository.delete(pending);
@@ -229,11 +221,10 @@ public class AuthService {
         passwordResetTokenRepository.flush();
 
         String token = TokenHasher.generateToken();
-        PasswordResetToken resetToken = PasswordResetToken.builder()
-                .tokenHash(TokenHasher.hash(token))
-                .user(user)
-                .expiresAt(LocalDateTime.now().plusMinutes(RESET_EXPIRE_MINUTES))
-                .build();
+        LocalDateTime now = LocalDateTime.now();
+        PasswordResetToken resetToken = new PasswordResetToken(
+                TokenHasher.hash(token), user, now.plusMinutes(RESET_EXPIRE_MINUTES), now);
+
         passwordResetTokenRepository.save(resetToken);
 
         emailService.sendPasswordResetEmail(email, token);
@@ -300,11 +291,10 @@ public class AuthService {
     private AuthResponse issueTokens(User user) {
         String accessToken = jwtService.generateAccessToken(user);
         String refreshToken = TokenHasher.generateToken();
-        RefreshToken entity = RefreshToken.builder()
-                .tokenHash(TokenHasher.hash(refreshToken))
-                .user(user)
-                .expiresAt(LocalDateTime.now().plusDays(REFRESH_EXPIRE_DAYS))
-                .build();
+        LocalDateTime now = LocalDateTime.now();
+        RefreshToken entity = new RefreshToken(
+                TokenHasher.hash(refreshToken), user, now.plusDays(REFRESH_EXPIRE_DAYS), now);
+
         refreshTokenRepository.save(entity);
 
         return AuthResponse.builder()

@@ -10,4 +10,5 @@ public interface PromotionCategoryRepository extends JpaRepository<PromotionCate
     List<PromotionCategory> findByPromotion_PromotionId(String promotionId);
 
     void deleteByPromotion_PromotionId(String promotionId);
+    List<PromotionCategory> findAllByCategory_CategoryId(String categoryId);
 }

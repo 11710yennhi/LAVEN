@@ -30,6 +30,8 @@ public class UserResponse {
     private LocalDate dateOfBirth;
     private String gender;
     private LocalDate hireDate;
+    private LocalDate lockedDate;
+    private String lockedReason;
 
     public static UserResponse from(User u) {
         return UserResponse.builder()
@@ -46,6 +48,8 @@ public class UserResponse {
                 .dateOfBirth(u.getDateOfBirth())
                 .gender(u.getGender())
                 .hireDate(u.getHireDate())
+                .lockedDate(u.getLockedDate())
+                .lockedReason(u.getLockedReason())
                 .build();
     }
 }
