@@ -41,6 +41,27 @@ public class ColorStockService {
     }
 
     @Transactional(readOnly = true)
+    public List<ColorStock> search(String productId, String productName,
+                                   String variantId, String size,
+                                   String colorId, String colorName,
+                                   Integer minStock, Integer maxStock,
+                                   boolean includeInactive) {
+        if ((minStock != null && minStock < 0)
+            || (maxStock != null && maxStock < 0)
+            || (minStock != null && maxStock != null && minStock > maxStock)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Khoảng tồn kho không hợp lệ");
+        }
+
+        return colorStockRepository.search(
+            blank(productId), blank(productName),
+            blank(variantId), blank(size),
+            blank(colorId), blank(colorName),
+            minStock, maxStock,
+            includeInactive
+        );
+    }
+
+    @Transactional(readOnly = true)
     public List<ColorStock> findLowStock(int threshold) {
         if (threshold < 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ngưỡng tồn kho phải >= 0");
@@ -102,6 +123,10 @@ public class ColorStockService {
             throw notFound("Sản phẩm");
         }
         return product;
+    }
+
+    private String blank(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private ResponseStatusException notFound(String entity) {

@@ -16,6 +16,24 @@ public class ProductImageController {
         this.productImageService = productImageService;
     }
 
+    @GetMapping("/public/images")
+    public List<ProductImage> searchPublicImages(
+        @RequestParam(required = false) String productId,
+        @RequestParam(required = false) String productName,
+        @RequestParam(required = false) String productImageId
+    ) {
+        return productImageService.search(productId, productName, productImageId);
+    }
+
+    @GetMapping("/staff/images")
+    public List<ProductImage> searchImages(
+        @RequestParam(required = false) String productId,
+        @RequestParam(required = false) String productName,
+        @RequestParam(required = false) String productImageId
+    ) {
+        return productImageService.search(productId, productName, productImageId);
+    }
+
     @GetMapping("/public/products/{productId}/images")
     public List<ProductImage> getPublicImages(@PathVariable String productId) {
         return productImageService.findByProduct(productId, false);

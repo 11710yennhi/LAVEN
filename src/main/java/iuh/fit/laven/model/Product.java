@@ -75,7 +75,7 @@ public class Product {
     @Transient
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     public String getProductDisplayName() {
-        return productName;
+        return category.getCategoryName() + " " + brand + " " + productName;
     }
 
     @Transient

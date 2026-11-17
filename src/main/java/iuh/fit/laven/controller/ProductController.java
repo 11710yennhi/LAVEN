@@ -19,29 +19,48 @@ public class ProductController {
     @GetMapping("/public/products")
     public List<Product> searchPublicProducts(
         @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) String productId,
+        @RequestParam(required = false) String productName,
         @RequestParam(required = false) String categoryId,
         @RequestParam(required = false) String brand,
+        @RequestParam(required = false) String origin,
         @RequestParam(required = false) String material,
         @RequestParam(required = false) String size,
         @RequestParam(required = false) String colorId,
         @RequestParam(required = false) Integer minPrice,
-        @RequestParam(required = false) Integer maxPrice
+        @RequestParam(required = false) Integer maxPrice,
+        @RequestParam(required = false) Integer minOriginalPrice,
+        @RequestParam(required = false) Integer maxOriginalPrice
     ) {
-        return search(keyword, categoryId, brand, material, size, colorId, minPrice, maxPrice, false);
+        return productService.search(
+            keyword, productId, productName, categoryId, brand, origin,
+            material, size, colorId, minPrice, maxPrice,
+            minOriginalPrice, maxOriginalPrice, null, false
+        );
     }
 
     @GetMapping("/staff/products")
     public List<Product> searchProducts(
         @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) String productId,
+        @RequestParam(required = false) String productName,
         @RequestParam(required = false) String categoryId,
         @RequestParam(required = false) String brand,
+        @RequestParam(required = false) String origin,
         @RequestParam(required = false) String material,
         @RequestParam(required = false) String size,
         @RequestParam(required = false) String colorId,
         @RequestParam(required = false) Integer minPrice,
-        @RequestParam(required = false) Integer maxPrice
+        @RequestParam(required = false) Integer maxPrice,
+        @RequestParam(required = false) Integer minOriginalPrice,
+        @RequestParam(required = false) Integer maxOriginalPrice,
+        @RequestParam(required = false) Boolean status
     ) {
-        return search(keyword, categoryId, brand, material, size, colorId, minPrice, maxPrice, true);
+        return productService.search(
+            keyword, productId, productName, categoryId, brand, origin,
+            material, size, colorId, minPrice, maxPrice,
+            minOriginalPrice, maxOriginalPrice, status, true
+        );
     }
 
     @GetMapping("/public/products/{productId}")
@@ -73,15 +92,5 @@ public class ProductController {
         @RequestParam(required = false) String reason
     ) {
         return productService.deactivate(productId, reason);
-    }
-
-    private List<Product> search(
-        String keyword, String categoryId, String brand, String material,
-        String size, String colorId, Integer minPrice, Integer maxPrice,
-        boolean includeInactive
-    ) {
-        return productService.search(
-            keyword, categoryId, brand, material,
-            size, colorId, minPrice, maxPrice, includeInactive);
     }
 }

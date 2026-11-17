@@ -26,6 +26,26 @@ public class CategoryService {
     }
 
     @Transactional(readOnly = true)
+    public List<Category> search(String keyword, String categoryName,
+                                 Integer minPackagingCost, Integer maxPackagingCost,
+                                 Boolean status, boolean includeInactive) {
+        if ((minPackagingCost != null && minPackagingCost < 0)
+            || (maxPackagingCost != null && maxPackagingCost < 0)
+            || (minPackagingCost != null && maxPackagingCost != null && minPackagingCost > maxPackagingCost)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Khoảng phí đóng gói không hợp lệ");
+        }
+
+        return categoryRepository.search(
+            blank(keyword),
+            blank(categoryName),
+            minPackagingCost,
+            maxPackagingCost,
+            status,
+            includeInactive
+        );
+    }
+
+    @Transactional(readOnly = true)
     public Category findById(String id, boolean includeInactive) {
         Category category = categoryRepository.findById(id)
             .orElseThrow(() -> notFound());
@@ -73,6 +93,10 @@ public class CategoryService {
         Category category = findById(id, true);
         category.setStatus(false);
         return categoryRepository.save(category);
+    }
+
+    private String blank(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private ResponseStatusException notFound() {

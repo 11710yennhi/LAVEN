@@ -17,13 +17,21 @@ public class ColorController {
     }
 
     @GetMapping("/public/colors")
-    public List<Color> getPublicColors() {
-        return colorService.findAll();
+    public List<Color> getPublicColors(
+        @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) String colorId,
+        @RequestParam(required = false) String name
+    ) {
+        return colorService.search(keyword, colorId, name);
     }
 
     @GetMapping("/staff/colors")
-    public List<Color> getColors() {
-        return colorService.findAll();
+    public List<Color> getColors(
+        @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) String colorId,
+        @RequestParam(required = false) String name
+    ) {
+        return colorService.search(keyword, colorId, name);
     }
 
     @PostMapping("/staff/colors")

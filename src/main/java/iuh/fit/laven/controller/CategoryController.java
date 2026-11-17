@@ -17,13 +17,24 @@ public class CategoryController {
     }
 
     @GetMapping("/public/categories")
-    public List<Category> getPublicCategories() {
-        return categoryService.findAll(false);
+    public List<Category> getPublicCategories(
+        @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) String categoryName,
+        @RequestParam(required = false) Integer minPackagingCost,
+        @RequestParam(required = false) Integer maxPackagingCost
+    ) {
+        return categoryService.search(keyword, categoryName, minPackagingCost, maxPackagingCost, null, false);
     }
 
     @GetMapping("/staff/categories")
-    public List<Category> getCategories() {
-        return categoryService.findAll(true);
+    public List<Category> getCategories(
+        @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) String categoryName,
+        @RequestParam(required = false) Integer minPackagingCost,
+        @RequestParam(required = false) Integer maxPackagingCost,
+        @RequestParam(required = false) Boolean status
+    ) {
+        return categoryService.search(keyword, categoryName, minPackagingCost, maxPackagingCost, status, true);
     }
 
     @GetMapping("/staff/categories/{categoryId}")

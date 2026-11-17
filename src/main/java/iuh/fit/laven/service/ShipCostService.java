@@ -27,6 +27,17 @@ public class ShipCostService {
     }
 
     @Transactional(readOnly = true)
+    public List<ShipCost> search(String city, Integer minPriceShip, Integer maxPriceShip) {
+        if ((minPriceShip != null && minPriceShip < 0)
+            || (maxPriceShip != null && maxPriceShip < 0)
+            || (minPriceShip != null && maxPriceShip != null && minPriceShip > maxPriceShip)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Khoảng phí vận chuyển không hợp lệ");
+        }
+
+        return shipCostRepository.search(blank(city), minPriceShip, maxPriceShip);
+    }
+
+    @Transactional(readOnly = true)
     public ShipCost findById(int id) {
         return shipCostRepository.findById(id).orElseThrow(this::notFound);
     }
@@ -56,6 +67,10 @@ public class ShipCostService {
         shipCost.setCity(request.getCity());
         shipCost.setPriceShip(request.getPriceShip());
         return shipCostRepository.save(shipCost);
+    }
+
+    private String blank(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private int nextShipCostId() {
