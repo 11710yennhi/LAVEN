@@ -16,7 +16,7 @@ import lombok.*;
 public class ReturnItem {
 
     @EmbeddedId
-    private ReturnItemId id = new ReturnItemId();
+    private ReturnItemId id;
 
     @NotNull
     @MapsId("orderId")

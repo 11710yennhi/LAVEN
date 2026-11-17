@@ -16,7 +16,7 @@ import lombok.*;
 public class OrderDetail {
 
     @EmbeddedId
-    private OrderDetailId id = new OrderDetailId();
+    private OrderDetailId id;
 
     @MapsId("orderId")
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

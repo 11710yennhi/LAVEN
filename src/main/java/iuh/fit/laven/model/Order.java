@@ -13,6 +13,8 @@ import jakarta.validation.constraints.PositiveOrZero;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "orders")
@@ -138,6 +140,16 @@ public class Order {
             createdAt = LocalDateTime.now();
         }
     }
+
+    @OneToMany(mappedBy = "order", fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<OrderDetail> orderDetails = new ArrayList<>();
+
+    @OneToOne(mappedBy = "order", fetch = FetchType.LAZY)
+    private Cancellation cancellation;
+
+    @OneToOne(mappedBy = "order", fetch = FetchType.LAZY)
+    private ReturnRecord returnRecord;
 
     public void applyAmounts(int productTotal, int shippingFee, int orderDiscount, int shippingDiscount) {
         setProductTotal(productTotal);
