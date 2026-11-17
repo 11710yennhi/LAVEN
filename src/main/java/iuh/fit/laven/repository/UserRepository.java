@@ -29,4 +29,6 @@ public interface UserRepository extends JpaRepository<User, String> {
             order by u.userId desc
             """)
     List<User> search(@Param("role") UserRole role, @Param("keyword") String keyword);
+
+    Optional<User> findByUserId(String userId);
 }

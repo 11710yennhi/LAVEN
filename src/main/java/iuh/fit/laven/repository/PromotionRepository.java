@@ -30,4 +30,9 @@ public interface PromotionRepository extends JpaRepository<Promotion, String> {
     List<Promotion> findByCustomerIsNull();
 
     List<Promotion> findByCustomerIsNotNull();
+
+    Optional<Promotion> findByCodeAndApplyTypeAndStatusIsTrue(String code, PromotionApplyType applyType);
+
+    List<Promotion> findAllByApplyTypeAndStatusIsTrueAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
+            PromotionApplyType applyType, LocalDate startDate, LocalDate endDate);
 }
