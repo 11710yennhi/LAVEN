@@ -1,7 +1,9 @@
 package iuh.fit.laven.service;
 
 import iuh.fit.laven.dto.request.CreateStaffRequest;
+import iuh.fit.laven.dto.request.LockUserRequest;
 import iuh.fit.laven.dto.request.UpdateProfileRequest;
+import iuh.fit.laven.dto.request.UpdateStaffRequest;
 import iuh.fit.laven.dto.response.UserResponse;
 import iuh.fit.laven.exception.AppException;
 import iuh.fit.laven.model.User;
@@ -65,27 +67,93 @@ public class UserService {
             throw new AppException(HttpStatus.CONFLICT, "Email đã được sử dụng");
         }
 
-        User staff = User.builder()
-                .userId(IdGenerator.nextUnique("USR", userRepository::existsById))
-                .email(email)
-                .phone(phone)
-                .passwordHash(passwordEncoder.encode(request.getPassword()))
-                .fullName(fullName)
-                .role(UserRole.STAFF)
-                .dateOfBirth(dateOfBirth)
-                .gender(ValidationUtil.optional(request.getGender()))
-                .hireDate(request.getHireDate())
-                .addressLine(ValidationUtil.optional(request.getAddressLine(), 255,
-                        "Số nhà, tên đường tối đa 255 ký tự"))
-                .ward(ValidationUtil.optional(request.getWard(), 100, "Phường/xã tối đa 100 ký tự"))
-                .city(ValidationUtil.optional(request.getCity(), 100, "Tỉnh/thành phố tối đa 100 ký tự"))
-                .build();
+        // Quy trình 2: Admin tạo nhân viên ngay, không cần xác thực email
+        User staff = new User(
+                IdGenerator.nextUnique("USR", userRepository::existsById),
+                email, phone, passwordEncoder.encode(request.getPassword()), fullName,
+                ValidationUtil.optional(request.getAddressLine(), 255, "Số nhà, tên đường tối đa 255 ký tự"),
+                ValidationUtil.optional(request.getWard(), 100, "Phường/xã tối đa 100 ký tự"),
+                ValidationUtil.optional(request.getCity(), 100, "Tỉnh/thành phố tối đa 100 ký tự"),
+                UserRole.STAFF, true,
+                dateOfBirth, ValidationUtil.optional(request.getGender()),
+                request.getHireDate(), null, null,   // hireDate, lockedDate, lockedReason
+                false, null, 0, null);
         return UserResponse.from(userRepository.save(staff));
     }
 
     @Transactional(readOnly = true)
     public List<UserResponse> listStaffs() {
         return userRepository.findByRole(UserRole.STAFF).stream().map(UserResponse::from).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public UserResponse getStaff(String staffId) {
+        return UserResponse.from(findStaff(staffId));
+    }
+
+    /** Sửa thông tin nhân viên (không đổi email, mật khẩu). Kiểm tra định dạng nằm trong setter của User. */
+    @Transactional
+    public UserResponse updateStaff(String staffId, UpdateStaffRequest request) {
+        User staff = findStaff(staffId);
+        staff.setPhone(request.getPhone());
+        staff.setFullName(request.getFullName());
+        staff.setDateOfBirth(request.getDateOfBirth());
+        staff.setGender(request.getGender());
+        staff.setHireDate(request.getHireDate());   // role = STAFF nên setter bắt buộc có ngày vào làm
+        staff.setAddressLine(ValidationUtil.optional(request.getAddressLine(), 255,
+                "Số nhà, tên đường tối đa 255 ký tự"));
+        staff.setWard(ValidationUtil.optional(request.getWard(), 100, "Phường/xã tối đa 100 ký tự"));
+        staff.setCity(ValidationUtil.optional(request.getCity(), 100, "Tỉnh/thành phố tối đa 100 ký tự"));
+        return UserResponse.from(userRepository.save(staff));
+    }
+
+    /** Khóa thủ công: bắt buộc lý do, xóa toàn bộ refresh token (quy trình 3 bước 7). */
+    @Transactional
+    public UserResponse lockStaff(String staffId, LockUserRequest request) {
+        User staff = findStaff(staffId);
+        if (!staff.isStatus()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Tài khoản đã bị khóa");
+        }
+        lock(staff, request == null ? null : request.getReason());
+        return UserResponse.from(staff);
+    }
+
+    @Transactional
+    public UserResponse unlockStaff(String staffId) {
+        User staff = findStaff(staffId);
+        unlock(staff);
+        return UserResponse.from(staff);
+    }
+
+    // ---------------- UC30: Staff quản lý khách hàng ----------------
+    @Transactional(readOnly = true)
+    public List<UserResponse> searchCustomers(String keyword) {
+        return userRepository.search(UserRole.CUSTOMER, ValidationUtil.optional(keyword)).stream()
+                .map(UserResponse::from).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public UserResponse getCustomer(String customerId) {
+        return UserResponse.from(findCustomer(customerId));
+    }
+
+    /** Khóa thủ công: bắt buộc lý do, xóa toàn bộ refresh token. */
+    @Transactional
+    public UserResponse lockCustomer(String customerId, LockUserRequest request) {
+        User customer = findCustomer(customerId);
+        if (!customer.isStatus()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Tài khoản đã bị khóa");
+        }
+        lock(customer, request == null ? null : request.getReason());
+        return UserResponse.from(customer);
+    }
+
+    /** Mở khóa (quy trình 15 bước 4). Lần giao thất bại tiếp theo vẫn kích hoạt tự động khóa lại. */
+    @Transactional
+    public UserResponse unlockCustomer(String customerId) {
+        User customer = findCustomer(customerId);
+        unlock(customer);
+        return UserResponse.from(customer);
     }
 
     // ---------------- UC35: tự động khóa tài khoản (quy trình 15) ----------------
@@ -109,7 +177,7 @@ public class UserService {
             user.setPendingLock(true);
             userRepository.save(user);
         } else {
-            lock(user);
+            lock(user, AUTO_LOCK_REASON);
         }
     }
 
@@ -121,17 +189,61 @@ public class UserService {
     public void lockIfPendingAndNoActiveOrders(String customerId, boolean hasActiveOrders) {
         User user = findUser(customerId);
         if (user.isStatus() && user.isPendingLock() && !hasActiveOrders) {
-            lock(user);
+            lock(user, AUTO_LOCK_REASON);
         }
     }
 
-    private void lock(User user) {
+    /**
+     * Quy trình 15 bước 3: khách đang pendingLock thì không được đặt đơn mới.
+     * Phần Đơn hàng (TV3) gọi ở ĐẦU hàm đặt đơn.
+     */
+    @Transactional(readOnly = true)
+    public void checkCanPlaceOrder(String customerId) {
+        User customer = findCustomer(customerId);
+        if (!customer.isStatus()) {
+            throw new AppException(HttpStatus.FORBIDDEN, "Tài khoản đã bị khóa");
+        }
+        if (customer.isPendingLock()) {
+            throw new AppException(HttpStatus.FORBIDDEN, "Tài khoản đang chờ khóa, không thể đặt đơn mới");
+        }
+    }
+
+    // ---------------- Nội bộ ----------------
+
+    /** Dùng chung cho khóa thủ công và tự động khóa. */
+    private void lock(User user, String reason) {
         user.setStatus(false);
-        user.setPendingLock(false);
+        user.setLockedReason(reason);   // status đã = false nên setter bắt buộc có lý do
         user.setLockedDate(LocalDate.now());
-        user.setLockedReason(AUTO_LOCK_REASON);
+        user.setPendingLock(false);
         userRepository.save(user);
-        refreshTokenRepository.deleteByUser(user);
+        refreshTokenRepository.deleteByUser(user);   // đăng xuất khỏi mọi thiết bị
+    }
+
+    /** Mở khóa (quy trình 15 bước 4): status = true, pendingLock = false, xóa lockedDate và lockedReason. */
+    private void unlock(User user) {
+        if (user.isStatus()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Tài khoản đang hoạt động, không cần mở khóa");
+        }
+        user.setStatus(true);
+        user.setPendingLock(false);
+        user.setLockedDate(null);
+        user.setLockedReason(null);
+        userRepository.save(user);
+    }
+
+    /** Chỉ tìm tài khoản role = STAFF; id của ADMIN hay CUSTOMER đều coi như không tìm thấy. */
+    private User findStaff(String staffId) {
+        return userRepository.findById(staffId)
+                .filter(u -> u.getRole() == UserRole.STAFF)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Không tìm thấy nhân viên"));
+    }
+
+    /** Chỉ tìm tài khoản role = CUSTOMER. */
+    private User findCustomer(String customerId) {
+        return userRepository.findById(customerId)
+                .filter(u -> u.getRole() == UserRole.CUSTOMER)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Không tìm thấy khách hàng"));
     }
 
     private User findUser(String userId) {

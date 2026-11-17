@@ -87,7 +87,7 @@ public class CartService {
         if (variantId == null || colorId == null) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Thiếu mã biến thể hoặc mã màu");
         }
-        CartItemId id = new CartItemId(cart.getCartId(), variantId.trim(), colorId.trim());
+        CartItemId id = new CartItemId(cart.getCartId(), variantId.trim(), normalizeColorId(colorId));
         cartItemRepository.findById(id).ifPresent(cartItemRepository::delete);
         return buildCart(cart);
     }
@@ -109,7 +109,7 @@ public class CartService {
                         || g.getQuantity() == null || g.getQuantity() <= 0) {
                     continue;
                 }
-                String key = g.getVariantId().trim() + "|" + g.getColorId().trim();
+                String key = g.getVariantId().trim() + "|" + normalizeColorId(g.getColorId());
                 merged.merge(key, g.getQuantity(), Integer::sum);
                 keys.putIfAbsent(key, g);
             }
@@ -118,7 +118,7 @@ public class CartService {
         for (Map.Entry<String, Integer> entry : merged.entrySet()) {
             CartItemRequest g = keys.get(entry.getKey());
             ColorStock stock = colorStockRepository
-                    .findById(new ColorStockId(g.getVariantId().trim(), g.getColorId().trim()))
+                    .findById(new ColorStockId(g.getVariantId().trim(), normalizeColorId(g.getColorId())))
                     .orElse(null);
             if (stock == null || !isSellable(stock)) {
                 continue; // món không tồn tại hoặc ngừng bán thì bỏ
@@ -148,9 +148,9 @@ public class CartService {
                 }
                 int quantity = r.getQuantity() == null ? 0 : r.getQuantity();
                 ColorStock stock = colorStockRepository
-                        .findById(new ColorStockId(r.getVariantId().trim(), r.getColorId().trim()))
+                        .findById(new ColorStockId(r.getVariantId().trim(), normalizeColorId(r.getColorId())))
                         .orElse(null);
-                responses.add(buildItem(r.getVariantId().trim(), r.getColorId().trim(), quantity, stock, promotions));
+                responses.add(buildItem(r.getVariantId().trim(), normalizeColorId(r.getColorId()), quantity, stock, promotions));
             }
         }
         return toCartResponse(responses);
@@ -163,10 +163,8 @@ public class CartService {
         return cartRepository.findByCustomer_UserId(customerId).orElseGet(() -> {
             User customer = userRepository.findById(customerId)
                     .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Không tìm thấy khách hàng"));
-            return cartRepository.save(Cart.builder()
-                    .cartId(IdGenerator.nextUnique("CRT", cartRepository::existsById))
-                    .customer(customer)
-                    .build());
+            return cartRepository.save(
+                    new Cart(IdGenerator.nextUnique("CRT", cartRepository::existsById), customer));
         });
     }
 
@@ -247,13 +245,7 @@ public class CartService {
         CartItemId id = itemId(cart, stock);
         CartItem item = cartItemRepository.findById(id).orElse(null);
         if (item == null) {
-            item = CartItem.builder()
-                    .id(id)
-                    .cart(cart)
-                    .variant(stock.getVariant())
-                    .color(stock.getColor())
-                    .quantity(quantity)
-                    .build();
+            item = new CartItem(cart, stock.getVariant(), stock.getColor(), quantity);
         } else {
             item.setQuantity(quantity);
         }
@@ -268,7 +260,7 @@ public class CartService {
         if (variantId == null || variantId.isBlank() || colorId == null || colorId.isBlank()) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Thiếu mã biến thể hoặc mã màu");
         }
-        return colorStockRepository.findById(new ColorStockId(variantId.trim(), colorId.trim()))
+        return colorStockRepository.findById(new ColorStockId(variantId.trim(), normalizeColorId(colorId)))
                 .orElseThrow(() -> new AppException(HttpStatus.BAD_REQUEST, "Sản phẩm không có màu này"));
     }
 
@@ -306,5 +298,10 @@ public class CartService {
 
     private int maxQuantity(Product product) {
         return product.getMaxQuantityPerOrder() == null ? DEFAULT_MAX_QUANTITY : product.getMaxQuantityPerOrder();
+    }
+
+    /** Mã màu lưu chữ hoa trong DB (#093F69), nên chuẩn hóa để client gửi chữ thường vẫn khớp. */
+    private String normalizeColorId(String colorId) {
+        return colorId == null ? null : colorId.trim().toUpperCase();
     }
 }

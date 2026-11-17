@@ -8,11 +8,8 @@ import iuh.fit.laven.model.Category;
 import iuh.fit.laven.model.Product;
 import iuh.fit.laven.model.Promotion;
 import iuh.fit.laven.model.PromotionBrand;
-import iuh.fit.laven.model.PromotionBrandId;
 import iuh.fit.laven.model.PromotionCategory;
-import iuh.fit.laven.model.PromotionCategoryId;
 import iuh.fit.laven.model.PromotionProduct;
-import iuh.fit.laven.model.PromotionProductId;
 import iuh.fit.laven.model.User;
 import iuh.fit.laven.model.enums.DiscountType;
 import iuh.fit.laven.model.enums.PromotionApplyType;
@@ -52,6 +49,7 @@ public class PromotionService {
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
     private final EmailService emailService;
+    private final OrderRepository orderRepository;   // của TV3: đếm đơn đã dùng mã
 
     /** Khuyến mãi sản phẩm đã áp dụng và số tiền giảm trên MỘT sản phẩm. */
     public record AppliedPromotion(Promotion promotion, int discount) {
@@ -80,10 +78,16 @@ public class PromotionService {
 
     @Transactional
     public PromotionResponse createPublic(PromotionRequest request) {
-        Promotion p = new Promotion();
-        p.setPromotionId(IdGenerator.nextUnique("PRM", promotionRepository::existsById));
-        p.setCustomer(null);
-        applyRequest(p, request, true);
+        String promotionId = IdGenerator.nextUnique("PRM", promotionRepository::existsById);
+        String code = resolveCode(promotionId, request, request.getApplyType(), true);
+        Promotion p = new Promotion(
+                promotionId, request.getName(), request.getDescription(), request.getApplyType(),
+                code, request.getDiscountType(), request.getDiscountValue(),
+                request.getMinOrderValue(), request.getMaxDiscountValue(),
+                request.getStartDate(), request.getEndDate(),
+                request.getStatus() == null || request.getStatus(),   // tạo mới: mặc định đang kích hoạt
+                null,                                                   // mã công khai: customer = null
+                request.getApplyType() == PromotionApplyType.PRODUCT ? null : request.getMaxOrderUsage());
         promotionRepository.save(p);
         saveScope(p, request);
         return toResponse(p);
@@ -103,7 +107,7 @@ public class PromotionService {
 
     // =====================================================================
     // 2. Khách xem mã của tôi - UC14 (mã công khai còn hạn + mã riêng của khách)
-    //    Chưa loại các mã khách đã dùng: cần OrderRepository của phần Đơn hàng.
+    //    Loại các mã khách đã dùng (tính cả đơn đã hủy hoặc trả hàng).
     // =====================================================================
     @Transactional(readOnly = true)
     public List<PromotionResponse> listForCustomer(String customerId) {
@@ -113,6 +117,7 @@ public class PromotionService {
                 .filter(p -> p.getApplyType() != PromotionApplyType.PRODUCT)
                 .filter(p -> !TEMPLATE_CODE.equals(p.getCode()))
                 .filter(p -> p.getCustomer() == null || customerId.equals(p.getCustomer().getUserId()))
+                .filter(p -> !hasCustomerUsed(p, customerId))
                 .map(this::toResponse)
                 .toList();
     }
@@ -173,21 +178,15 @@ public class PromotionService {
     @Transactional
     public Promotion ensureCompensationTemplate() {
         return promotionRepository.findByCode(TEMPLATE_CODE).orElseGet(() -> {
-            Promotion t = new Promotion();
-            t.setPromotionId(IdGenerator.nextUnique("PRM", promotionRepository::existsById));
-            t.setName("Mã mẫu khuyến mãi bồi thường");
-            t.setDescription("Mã mẫu để hệ thống cấp mã bồi thường khi Staff hủy đơn. Không dùng trực tiếp.");
-            t.setApplyType(PromotionApplyType.ORDER);
-            t.setCode(TEMPLATE_CODE);
-            t.setDiscountType(DiscountType.FIXED_AMOUNT);
-            t.setDiscountValue(10);     // 10% giá trị đơn bị hủy
-            t.setMinOrderValue(0);
-            t.setMaxDiscountValue(10);  // 10% giá trị đơn bị hủy
-            t.setStartDate(LocalDate.now());
-            t.setEndDate(LocalDate.of(2099, 12, 31));
-            t.setStatus(false);
-            t.setCustomer(null);
-            t.setMaxOrderUsage(null);
+            // Mã mẫu: FIXED_AMOUNT 10 = 10% giá trị đơn bị hủy; status luôn false; customer = null
+            Promotion t = new Promotion(
+                    IdGenerator.nextUnique("PRM", promotionRepository::existsById),
+                    "Mã mẫu khuyến mãi bồi thường",
+                    "Mã mẫu để hệ thống cấp mã bồi thường khi Staff hủy đơn. Không dùng trực tiếp.",
+                    PromotionApplyType.ORDER, TEMPLATE_CODE,
+                    DiscountType.FIXED_AMOUNT, 10, 0, 10,
+                    LocalDate.now(), LocalDate.of(2099, 12, 31),
+                    false, null, null);
             return promotionRepository.save(t);
         });
     }
@@ -200,27 +199,26 @@ public class PromotionService {
     public Promotion createCompensationPromotion(User customer, int base) {
         Promotion t = ensureCompensationTemplate();
 
-        Promotion p = new Promotion();
-        p.setPromotionId(IdGenerator.nextUnique("PRM", promotionRepository::existsById));
-        p.setName("Mã bồi thường đơn hàng bị hủy");
-        p.setDescription("Mã bồi thường do cửa hàng hủy đơn. Chỉ áp dụng cho tài khoản này, một đơn hàng.");
-        p.setApplyType(PromotionApplyType.ORDER);
-        p.setCode(CodeGenerator.nextUnique(AUTO_CODE_LENGTH, c -> promotionRepository.findByCode(c).isPresent()));
-        p.setDiscountType(t.getDiscountType());
-        p.setMinOrderValue(0);
+        // Công thức phần g: base = totalAmount của đơn bị hủy
+        int discountValue;
+        int maxDiscountValue;
         if (t.getDiscountType() == DiscountType.PERCENT) {
-            p.setDiscountValue(t.getDiscountValue());
-            p.setMaxDiscountValue(ceil1000((long) base * t.getMaxDiscountValue() / 100));
+            discountValue = t.getDiscountValue();
+            maxDiscountValue = ceil1000((long) base * t.getMaxDiscountValue() / 100);
         } else {
-            int amount = ceil1000((long) base * t.getDiscountValue() / 100);
-            p.setDiscountValue(amount);
-            p.setMaxDiscountValue(amount);
+            discountValue = ceil1000((long) base * t.getDiscountValue() / 100);
+            maxDiscountValue = discountValue;
         }
-        p.setStartDate(LocalDate.now());
-        p.setEndDate(LocalDate.now().plusMonths(1));
-        p.setStatus(true);
-        p.setCustomer(customer);
-        p.setMaxOrderUsage(1);
+        LocalDate today = LocalDate.now();
+        Promotion p = new Promotion(
+                IdGenerator.nextUnique("PRM", promotionRepository::existsById),
+                "Mã bồi thường đơn hàng bị hủy",
+                "Mã bồi thường do cửa hàng hủy đơn. Chỉ áp dụng cho tài khoản này, một đơn hàng.",
+                PromotionApplyType.ORDER,
+                CodeGenerator.nextUnique(AUTO_CODE_LENGTH, c -> promotionRepository.findByCode(c).isPresent()),
+                t.getDiscountType(), discountValue, 0, maxDiscountValue,
+                today, today.plusMonths(1),          // hiệu lực 1 tháng
+                true, customer, 1);                  // chỉ khách này, dùng 1 lần
         promotionRepository.save(p);
 
         emailService.sendCompensationEmail(customer.getEmail(), p.getCode(), p.getEndDate());
@@ -318,8 +316,8 @@ public class PromotionService {
 
     /**
      * Kiểm tra mã ORDER/SHIPPING khi đặt hàng (quy trình 7 bước 3), khóa dòng Promotion.
-     * CHƯA kiểm tra 2 điều cần đếm đơn: "khách chưa từng dùng mã" và "lượt dùng < maxOrderUsage";
-     * phần Đơn hàng kiểm tra bằng OrderRepository, và đặt status = false khi mã đạt maxOrderUsage.
+     * Gồm cả quy trình 13 bước 4: mỗi khách dùng mỗi mã 1 lần (kể cả đơn đã hủy/trả)
+     * và mã chưa vượt maxOrderUsage. Sau khi lưu đơn, phần Đơn hàng gọi markUsed(p).
      */
     @Transactional
     public Promotion getValidCodeForOrder(String code, PromotionApplyType expectedType,
@@ -343,12 +341,52 @@ public class PromotionService {
         if (p.getCustomer() != null && !p.getCustomer().getUserId().equals(customerId)) {
             throw bad("Mã giảm giá không dành cho tài khoản này");
         }
+        if (hasCustomerUsed(p, customerId)) {
+            throw bad("Bạn đã sử dụng mã giảm giá này");
+        }
+        if (p.getMaxOrderUsage() != null && countUsedCustomers(p) >= p.getMaxOrderUsage()) {
+            throw bad("Mã giảm giá đã hết lượt sử dụng");
+        }
         return p;
+    }
+
+    /**
+     * Quy trình 13 bước 4: đủ maxOrderUsage khách đã dùng thì tắt mã (status = false).
+     * Phần Đơn hàng (TV3) gọi SAU KHI đã lưu đơn có gắn mã, trong cùng transaction đặt đơn.
+     */
+    @Transactional
+    public void markUsed(Promotion p) {
+        if (p == null || p.getMaxOrderUsage() == null) {
+            return; // không có mã hoặc mã không giới hạn số khách
+        }
+        if (countUsedCustomers(p) >= p.getMaxOrderUsage()) {
+            p.setStatus(false);
+            promotionRepository.save(p);
+        }
     }
 
     // =====================================================================
     // Nội bộ
     // =====================================================================
+
+    /** Khách đã có đơn nào gắn mã này chưa (mọi trạng thái đơn, kể cả CANCELLED, RETURNED). */
+    private boolean hasCustomerUsed(Promotion p, String customerId) {
+        String id = p.getPromotionId();
+        return p.getApplyType() == PromotionApplyType.SHIPPING
+                ? orderRepository.existsByCustomer_UserIdAndShippingPromotion_PromotionId(customerId, id)
+                : orderRepository.existsByCustomer_UserIdAndOrderPromotion_PromotionId(customerId, id);
+    }
+
+    /**
+     * Số khách đã dùng mã. Mỗi khách chỉ dùng mỗi mã 1 lần (getValidCodeForOrder đã chặn),
+     * nên số đơn gắn mã = số khách đã dùng mã.
+     */
+    private long countUsedCustomers(Promotion p) {
+        String id = p.getPromotionId();
+        return p.getApplyType() == PromotionApplyType.SHIPPING
+                ? orderRepository.countByShippingPromotion_PromotionId(id)
+                : orderRepository.countByOrderPromotion_PromotionId(id);
+    }
     private boolean appliesTo(ScopedPromotion sp, Product product) {
         if (sp.productIds().contains(product.getProductId())) {
             return true;
@@ -416,7 +454,7 @@ public class PromotionService {
         p.setName(name);
         p.setDescription(description);
         p.setApplyType(applyType);
-        p.setCode(resolveCode(p, r, applyType, isNew));
+        p.setCode(resolveCode(p.getPromotionId(), r, applyType, isNew));
         p.setDiscountType(discountType);
         p.setDiscountValue(discountValue);
         p.setMinOrderValue(minOrderValue);
@@ -431,7 +469,7 @@ public class PromotionService {
         }
     }
 
-    private String resolveCode(Promotion p, PromotionRequest r, PromotionApplyType applyType, boolean isNew) {
+    private String resolveCode(String promotionId, PromotionRequest r, PromotionApplyType applyType, boolean isNew) {
         if (applyType == PromotionApplyType.PRODUCT) {
             return null; // khuyến mãi sản phẩm không có mã
         }
@@ -447,7 +485,7 @@ public class PromotionService {
             throw bad("Mã giảm giá không hợp lệ");
         }
         Optional<Promotion> existing = promotionRepository.findByCode(code);
-        if (existing.isPresent() && !existing.get().getPromotionId().equals(p.getPromotionId())) {
+        if (existing.isPresent() && !existing.get().getPromotionId().equals(promotionId)) {
             throw new AppException(HttpStatus.CONFLICT, "Mã giảm giá đã tồn tại");
         }
         return code;
@@ -468,28 +506,17 @@ public class PromotionService {
             if (brand.length() > 100) {
                 throw bad("Tên thương hiệu tối đa 100 ký tự");
             }
-            promotionBrandRepository.save(PromotionBrand.builder()
-                    .id(new PromotionBrandId(p.getPromotionId(), brand))
-                    .promotion(p)
-                    .build());
+            promotionBrandRepository.save(new PromotionBrand(p, brand));
         }
         for (String categoryId : clean(r.getCategoryIds())) {
             Category category = categoryRepository.findById(categoryId)
                     .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Danh mục sản phẩm không tồn tại"));
-            promotionCategoryRepository.save(PromotionCategory.builder()
-                    .id(new PromotionCategoryId(p.getPromotionId(), categoryId))
-                    .promotion(p)
-                    .category(category)
-                    .build());
+            promotionCategoryRepository.save(new PromotionCategory(p, category));
         }
         for (String productId : clean(r.getProductIds())) {
             Product product = productRepository.findById(productId)
                     .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Sản phẩm không tồn tại"));
-            promotionProductRepository.save(PromotionProduct.builder()
-                    .id(new PromotionProductId(p.getPromotionId(), productId))
-                    .promotion(p)
-                    .product(product)
-                    .build());
+            promotionProductRepository.save(new PromotionProduct(p, product));
         }
     }
 
