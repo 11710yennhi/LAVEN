@@ -1,5 +1,6 @@
 package iuh.fit.laven.service;
 
+import iuh.fit.laven.dto.response.ProductImageUploadSignatureResponse;
 import iuh.fit.laven.model.Product;
 import iuh.fit.laven.model.ProductImage;
 import iuh.fit.laven.repository.ProductImageRepository;
@@ -18,10 +19,14 @@ import java.util.List;
 public class ProductImageService {
     private final ProductImageRepository imageRepository;
     private final ProductRepository productRepository;
+    private final ProductImageCloudinaryService cloudinaryService;
 
-    public ProductImageService(ProductImageRepository imageRepository, ProductRepository productRepository) {
+    public ProductImageService(ProductImageRepository imageRepository,
+                               ProductRepository productRepository,
+                               ProductImageCloudinaryService cloudinaryService) {
         this.imageRepository = imageRepository;
         this.productRepository = productRepository;
+        this.cloudinaryService = cloudinaryService;
     }
 
     @Transactional(readOnly = true)
@@ -35,17 +40,55 @@ public class ProductImageService {
         return imageRepository.search(blank(productId), blank(productName), blank(productImageId));
     }
 
-    public ProductImage create(String productId, ProductImage image) {
-        image.setProduct(requireProduct(productId, false));
+    /**
+     * 1. Lấy chữ ký số để React gửi file thẳng lên Cloudinary
+     */
+    public ProductImageUploadSignatureResponse getUploadSignature(String productId) {
+        requireProduct(productId, false);
+        return cloudinaryService.signUpload(productId);
+    }
+
+    /**
+     * 2. Thêm ảnh mới (Add): Nhận URL từ React sau khi tải lên Cloudinary
+     */
+    public ProductImage addImage(String productId, String imageUrl) {
+        Product product = requireProduct(productId, false);
+        String validUrl = cloudinaryService.validateImageUrl(imageUrl, productId);
+
+        ProductImage image = new ProductImage();
+        image.setProduct(product);
+        image.setImageUrl(validUrl);
         image.setProductImageId(nextImageId());
         return imageRepository.save(image);
     }
 
-    public ProductImage update(String imageId, ProductImage request) {
+    /**
+     * 3. Cập nhật ảnh (Update): Thay URL ảnh mới và tự động dọn ảnh cũ trên Cloudinary
+     */
+    public ProductImage updateImage(String imageId, String newImageUrl) {
         ProductImage image = imageRepository.findById(imageId)
             .orElseThrow(() -> notFound("Ảnh sản phẩm"));
-        image.setImageUrl(request.getImageUrl());
-        return imageRepository.save(image);
+
+        String validUrl = cloudinaryService.validateImageUrl(newImageUrl, image.getProduct().getProductId());
+        String oldImageUrl = image.getImageUrl();
+
+        image.setImageUrl(validUrl);
+        ProductImage saved = imageRepository.save(image);
+
+        // Dọn ảnh cũ trên Cloudinary
+        cloudinaryService.deleteByUrl(oldImageUrl);
+        return saved;
+    }
+
+    /**
+     * 4. Xóa ảnh (Delete): Xóa bản ghi trong DB và xóa luôn file trên Cloudinary
+     */
+    public void deleteImage(String imageId) {
+        ProductImage image = imageRepository.findById(imageId)
+            .orElseThrow(() -> notFound("Ảnh sản phẩm"));
+
+        cloudinaryService.deleteByUrl(image.getImageUrl());
+        imageRepository.delete(image);
     }
 
     private String blank(String value) {
