@@ -41,6 +41,11 @@ public class OrderService {
     private final PromotionBrandRepository promotionBrandRepository;
     private final OrderDetailRepository orderDetailRepository;
     private final CartItemRepository cartItemRepository;
+    private final ReturnRecordRepository returnRecordRepository;
+    private final ReturnItemRepository returnItemRepository;
+    private final UserService userService;
+    private final PromotionService promotionService;
+    private final CancellationRepository cancellationRepository;
 
 
     @Value("${payment.vietqr.bank-id}")
@@ -343,11 +348,9 @@ public class OrderService {
     @Transactional
     public CreateOrderResponse createOrder(String customerId, CreateOrderRequest request) {
         LocalDate today = LocalDate.now();
+        userService.checkCanPlaceOrder(customerId);
         User customer = userRepository.findById(customerId)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Không tìm thấy khách hàng"));
-        if (customer.isPendingLock()) {
-            throw new AppException(HttpStatus.BAD_REQUEST, "Tài khoản đang chờ khóa, không thể đặt đơn mới");
-        }
         ShipCost shipCost = shipCostRepository
                 .findByCityIgnoreCase(request.getReceiverCity())
                 .orElseThrow(() -> new AppException(HttpStatus.BAD_REQUEST, "Không hỗ trợ giao hàng đến tỉnh/thành phố này"));
@@ -515,7 +518,7 @@ public class OrderService {
             colorStock.setStock(colorStock.getStock() - item.getQuantity());
         }
         for (CreateOrderRequest.Item item : request.getItems()) {
-            cartItemRepository.deleteSelectedItem(customerId, item.getVariantId(), item.getColorId());
+            cartItemRepository.deleteSelectedItem(customerId, item.getVariantId(), item.getColorId().toUpperCase());
         }
         if (orderPromotion != null) {
             long usedCount = orderRepository
@@ -559,7 +562,164 @@ public class OrderService {
                 .build();
     }
 
+    @Transactional
+    public void updateOrderStatus(String orderId, OrderStatus newStatus, String trackingCode) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(HttpStatus.BAD_REQUEST, "Không tìm thấy đơn hàng"));
+        OrderStatus currentStatus = order.getOrderStatus();
+        if (currentStatus == newStatus) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Đơn hàng đang ở trạng thái này");
+        }
+        // PENDING -> CONFIRMED
+        if (currentStatus == OrderStatus.PENDING && newStatus == OrderStatus.CONFIRMED) {
+            if (order.getPaymentMethod() == PaymentMethod.BANK_TRANSFER && order.getPaymentStatus() != PaymentStatus.PAID) {
+                throw new AppException(HttpStatus.BAD_REQUEST,
+                        "Đơn hàng chuyển khoản phải được thanh toán trước khi xác nhận"
+                );
+            }
+            order.setOrderStatus(OrderStatus.CONFIRMED);
+            order.setConfirmedAt(LocalDateTime.now());
+        }
+        // CONFIRMED -> SHIPPING
+        else if (currentStatus == OrderStatus.CONFIRMED && newStatus == OrderStatus.SHIPPING) {
+            if (trackingCode == null || trackingCode.isBlank()) {
+                throw new AppException(HttpStatus.BAD_REQUEST, "Mã vận đơn không được để trống");
+            }
+            order.setOrderStatus(OrderStatus.SHIPPING);
+            order.setTrackingCode(trackingCode.trim());
+            order.setShippingAt(LocalDateTime.now());
+        }
+        // SHIPPING -> DELIVERED
+        else if (currentStatus == OrderStatus.SHIPPING && newStatus == OrderStatus.DELIVERED) {
+            order.setOrderStatus(OrderStatus.DELIVERED);
+            order.setDeliveredAt(LocalDateTime.now());
+        }
+        // SHIPPING -> DELIVERY_FAILED
+        else if (currentStatus == OrderStatus.SHIPPING && newStatus == OrderStatus.DELIVERY_FAILED) {
+            order.setOrderStatus(OrderStatus.DELIVERY_FAILED);
+            handleDeliveryFailed(order);
+            orderRepository.saveAndFlush(order);
+            String customerId = order.getCustomer().getUserId();
+            long failedDeliveryCount = orderRepository
+                    .countByCustomer_UserIdAndOrderStatus(customerId, OrderStatus.DELIVERY_FAILED);
+            boolean hasActiveOrders = orderRepository.existsByCustomer_UserIdAndOrderStatusIn(customerId,
+                    List.of(OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.SHIPPING));
+            userService.lockIfNeeded(customerId, failedDeliveryCount, hasActiveOrders);
+        }
+        // DELIVERED -> COMPLETED
+        else if (currentStatus == OrderStatus.DELIVERED
+                && newStatus == OrderStatus.COMPLETED) {
+            if (order.getPaymentStatus() != PaymentStatus.PAID) {
+                throw new AppException(HttpStatus.BAD_REQUEST, "Đơn hàng chưa được xác nhận thanh toán");
+            }
+            order.setOrderStatus(OrderStatus.COMPLETED);
+            order.setCompletedAt(LocalDateTime.now());
+            String customerId = order.getCustomer().getUserId();
+            boolean hasActiveOrders = orderRepository.existsByCustomer_UserIdAndOrderStatusIn(customerId,
+                    List.of(OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.SHIPPING, OrderStatus.DELIVERED));
+            userService.lockIfPendingAndNoActiveOrders(customerId, hasActiveOrders);
+        }
+        else {
+            throw new AppException(HttpStatus.BAD_REQUEST,
+                    "Không thể chuyển trạng thái đơn hàng từ " + currentStatus + " sang " + newStatus);
+        }
+        orderRepository.save(order);
+    }
 
+    @Transactional
+    public void cancelCustomerOrder(String customerId, String orderId, String reason) {
+        reason = reason.trim();
+        if (reason == null || reason.isBlank()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Lý do hủy đơn không được để trống");
+        }
+        if (reason.length() > 500) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Lý do hủy đơn không được vượt quá 500 ký tự");
+        }
+        Order order = orderRepository
+                .findByOrderIdAndCustomer_UserIdForUpdate(orderId, customerId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Không tìm thấy đơn hàng"));
+        if (order.getOrderStatus() != OrderStatus.PENDING) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Chỉ được hủy đơn hàng đang chờ xác nhận");
+        }
+        if (order.getPaymentStatus() == PaymentStatus.WAITING) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Đơn hàng đang chờ xác nhận thanh toán, không thể hủy");
+        }
+        for (OrderDetail detail : order.getOrderDetails()) {
+            ColorStock stock = colorStockRepository
+                    .findByVariantAndColorForUpdate(detail.getVariant().getVariantId(), detail.getColor().getColorId())
+                    .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Không tìm thấy thông tin tồn kho"));
+            stock.setStock(stock.getStock() + detail.getQuantity());
+        }
+        Cancellation cancellation = Cancellation.builder()
+                .order(order)
+                .reason(reason)
+                .cancelledBy(order.getCustomer())
+                .cancelledAt(LocalDateTime.now())
+                .compensationPromotion(null)
+                .build();
+        cancellationRepository.save(cancellation);
+        order.setOrderStatus(OrderStatus.CANCELLED);
+        if (order.getPaymentStatus() == PaymentStatus.PAID) {
+            order.setPaymentStatus(PaymentStatus.REFUND_PENDING);
+        }
+        order.setCancellation(cancellation);
+        orderRepository.saveAndFlush(order);
+        List<OrderStatus> activeStatuses = List.of(OrderStatus.PENDING, OrderStatus.CONFIRMED,
+                OrderStatus.SHIPPING, OrderStatus.DELIVERED);
+        boolean hasActiveOrders = orderRepository
+                .existsByCustomer_UserIdAndOrderStatusIn(customerId, activeStatuses);
+        userService.lockIfPendingAndNoActiveOrders(customerId, hasActiveOrders);
+    }
+
+    @Transactional
+    public void cancelStaffOrder(String staffId, String orderId, String reason) {
+        reason = reason.trim();
+        if (reason == null || reason.isBlank()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Lý do hủy đơn không được để trống");
+        }
+        if (reason.length() > 500) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Lý do hủy đơn không được vượt quá 500 ký tự");
+        }
+        User staff = userRepository.findById(staffId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Không tìm thấy nhân viên"));
+        Order order = orderRepository.findByOrderIdForUpdate(orderId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Không tìm thấy đơn hàng"));
+        if (order.getOrderStatus() != OrderStatus.PENDING) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Chỉ được hủy đơn hàng đang chờ xác nhận");
+        }
+        if (order.getPaymentStatus() == PaymentStatus.WAITING) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Đơn hàng đang chờ xác nhận thanh toán, không thể hủy");
+        }
+        for (OrderDetail detail : order.getOrderDetails()) {
+
+            ColorStock stock = colorStockRepository
+                    .findByVariantAndColorForUpdate(
+                        detail.getVariant().getVariantId(), detail.getColor().getColorId())
+                    .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Không tìm thấy thông tin tồn kho"));
+            stock.setStock(stock.getStock() + detail.getQuantity());
+        }
+        Promotion compensationPromotion = promotionService.createCompensationPromotion(
+                order.getCustomer(), order.getTotalAmount());
+        Cancellation cancellation = Cancellation.builder()
+                .order(order)
+                .reason(reason)
+                .cancelledBy(staff)
+                .cancelledAt(LocalDateTime.now())
+                .compensationPromotion(compensationPromotion)
+                .build();
+        cancellationRepository.save(cancellation);
+        order.setOrderStatus(OrderStatus.CANCELLED);
+        if (order.getPaymentStatus() == PaymentStatus.PAID) {
+            order.setPaymentStatus(PaymentStatus.REFUND_PENDING);
+        }
+        order.setCancellation(cancellation);
+        orderRepository.saveAndFlush(order);
+        List<OrderStatus> activeStatuses = List.of(
+                OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.SHIPPING, OrderStatus.DELIVERED);
+        boolean hasActiveOrders = orderRepository.existsByCustomer_UserIdAndOrderStatusIn(
+                order.getCustomer().getUserId(), activeStatuses);
+        userService.lockIfPendingAndNoActiveOrders(order.getCustomer().getUserId(), hasActiveOrders);
+    }
 
 
     private String generateVietQrCodeUrl(Integer amount, String transferContent) {
@@ -883,6 +1043,42 @@ public class OrderService {
                 .build();
     }
 
-
+    private void handleDeliveryFailed(Order order) {
+        String orderId = order.getOrderId();
+        if (returnRecordRepository.existsById(orderId)) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Đơn hàng đã có phiếu hoàn hàng");
+        }
+        if (order.getOrderDetails() == null || order.getOrderDetails().isEmpty()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Đơn hàng không có sản phẩm");
+        }
+        if (order.getPaymentStatus() == PaymentStatus.PAID) {
+            order.setPaymentStatus(PaymentStatus.REFUND_PENDING);
+        }
+        ReturnRecord returnRecord = ReturnRecord.builder()
+                .order(order)
+                .returnType(ReturnType.FAILED_DELIVERY)
+                .status(ReturnStatus.IN_TRANSIT)
+                .note("Đơn hàng giao thất bại, hàng đang được hoàn về cửa hàng")
+                .build();
+        returnRecordRepository.save(returnRecord);
+        List<ReturnItem> returnItems = new ArrayList<>();
+        for (OrderDetail detail : order.getOrderDetails()) {
+            ReturnItemId returnItemId = new ReturnItemId(
+                    orderId,
+                    detail.getVariant().getVariantId(),
+                    detail.getColor().getColorId()
+            );
+            ReturnItem returnItem = ReturnItem.builder()
+                    .id(returnItemId)
+                    .order(order)
+                    .variant(detail.getVariant())
+                    .color(detail.getColor())
+                    .quantity(detail.getQuantity())
+                    .damagedQuantity(0)
+                    .build();
+            returnItems.add(returnItem);
+        }
+        returnItemRepository.saveAll(returnItems);
+    }
 
 }

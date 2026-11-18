@@ -66,6 +66,11 @@ public class OrderController {
         return orderService.createOrder(me.getUserId(), request);
     }
 
+    @PostMapping("/{id}/cancel")
+    public void cancelCustomerOrder(@PathVariable String id, @RequestParam String reason,
+            @AuthenticationPrincipal CustomUserDetails me) {
+        orderService.cancelCustomerOrder(me.getUserId(), id, reason);
+    }
 
     //STAFF
 
@@ -92,5 +97,16 @@ public class OrderController {
         return orderService.updateOrderPayment(id, paymentStatus);
     }
 
+    @PutMapping("/staff/orders/{id}/status")
+    public void updateOrderStatus(@PathVariable String id, @RequestParam OrderStatus status,
+            @RequestParam(required = false) String trackingCode) {
+        orderService.updateOrderStatus(id, status, trackingCode);
+    }
+
+    @PutMapping("/staff/orders/{id}/cancel")
+    public void cancelStaffOrder(@PathVariable String id, @RequestParam String reason,
+            @AuthenticationPrincipal CustomUserDetails me){
+        orderService.cancelStaffOrder(me.getUserId(), id, reason);
+    }
 
 }
