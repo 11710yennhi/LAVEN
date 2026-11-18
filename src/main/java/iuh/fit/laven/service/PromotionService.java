@@ -360,6 +360,45 @@ public class PromotionService {
         }
     }
 
+    /**
+     * Gợi ý mã ORDER/SHIPPING giảm nhiều nhất mà khách đang dùng được (quyết định nhóm 18/11).
+     * Chỉ để GỢI Ý ở bước xem trước; khách được đổi hoặc bỏ mã. Lúc đặt đơn vẫn kiểm tra
+     * mã khách gửi lên bằng getValidCodeForOrder.
+     */
+    @Transactional(readOnly = true)
+    public Optional<AppliedPromotion> suggestBestCode(String customerId, PromotionApplyType type,
+                                                      int productTotal, int shippingFee) {
+        if (type == PromotionApplyType.PRODUCT) {
+            throw bad("Chỉ gợi ý mã giảm đơn hàng hoặc vận chuyển");
+        }
+        LocalDate today = LocalDate.now();
+        AppliedPromotion best = null;
+        for (Promotion p : promotionRepository
+                .findByStatusTrueAndStartDateLessThanEqualAndEndDateGreaterThanEqual(today, today)) {
+            if (p.getApplyType() != type || TEMPLATE_CODE.equals(p.getCode())) {
+                continue;
+            }
+            if (p.getCustomer() != null && !p.getCustomer().getUserId().equals(customerId)) {
+                continue; // mã riêng của khách khác
+            }
+            if (productTotal < p.getMinOrderValue()) {
+                continue;
+            }
+            if (hasCustomerUsed(p, customerId)) {
+                continue; // khách đã dùng mã này
+            }
+            if (p.getMaxOrderUsage() != null && countUsedCustomers(p) >= p.getMaxOrderUsage()) {
+                continue; // hết lượt
+            }
+            int discount = type == PromotionApplyType.SHIPPING
+                    ? calculateShippingDiscount(p, shippingFee)
+                    : calculateOrderDiscount(p, productTotal);
+            if (discount > 0 && (best == null || discount > best.discount())) {
+                best = new AppliedPromotion(p, discount);
+            }
+        }
+        return Optional.ofNullable(best);
+    }
     // =====================================================================
     // Nội bộ
     // =====================================================================
