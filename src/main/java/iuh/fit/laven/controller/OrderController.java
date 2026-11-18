@@ -66,7 +66,7 @@ public class OrderController {
         return orderService.createOrder(me.getUserId(), request);
     }
 
-    @PostMapping("/{id}/cancel")
+    @PostMapping("/customer/orders/{id}/cancel")
     public void cancelCustomerOrder(@PathVariable String id, @RequestParam String reason,
             @AuthenticationPrincipal CustomUserDetails me) {
         orderService.cancelCustomerOrder(me.getUserId(), id, reason);
@@ -74,19 +74,12 @@ public class OrderController {
 
     //STAFF
 
-    @RestController
-    @RequestMapping("/api/staff/orders")
-    @RequiredArgsConstructor
-    public class StaffOrderController {
-        private final OrderService orderService;
-        @GetMapping
-        public Page<StaffOrderSummaryResponse> getStaffOrders(
-                @ModelAttribute StaffOrderFilterRequest filter) {
-            return orderService.getStaffOrders(filter);
-        }
+    @GetMapping("/staff/orders")
+    public Page<StaffOrderSummaryResponse> getStaffOrders(@ModelAttribute StaffOrderFilterRequest filter) {
+        return orderService.getStaffOrders(filter);
     }
 
-    @GetMapping("/orders/{id}")
+    @GetMapping("/staff/orders/{id}")
     public StaffOrderDetailResponse getStaffOrderDetail(@PathVariable String id) {
         return orderService.getStaffOrderDetail(id);
     }
@@ -99,8 +92,9 @@ public class OrderController {
 
     @PutMapping("/staff/orders/{id}/status")
     public void updateOrderStatus(@PathVariable String id, @RequestParam OrderStatus status,
-            @RequestParam(required = false) String trackingCode) {
-        orderService.updateOrderStatus(id, status, trackingCode);
+            @RequestParam(required = false) String trackingCode,
+            @AuthenticationPrincipal CustomUserDetails me) {
+        orderService.updateOrderStatus(id, status, trackingCode, me.getUserId());
     }
 
     @PutMapping("/staff/orders/{id}/cancel")

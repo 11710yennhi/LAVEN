@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface VariantRepository extends JpaRepository<Variant, String> {
     List<Variant> findByProductProductId(String productId);
@@ -49,4 +50,6 @@ public interface VariantRepository extends JpaRepository<Variant, String> {
         @Param("minHeight") Double minHeight,
         @Param("maxHeight") Double maxHeight
     );
+
+    Optional<Variant> findByVariantId(String variantId);
 }
