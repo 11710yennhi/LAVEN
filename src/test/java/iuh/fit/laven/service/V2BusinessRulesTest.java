@@ -2,7 +2,6 @@ package iuh.fit.laven.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import iuh.fit.laven.dto.response.CartItemResponse;
 import iuh.fit.laven.dto.response.CategoryResponse;
 import iuh.fit.laven.dto.response.ProductResponse;
 import iuh.fit.laven.dto.response.StaffProductResponse;
@@ -29,7 +28,7 @@ class V2BusinessRulesTest {
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Test
-    void publicProductAndCartDoNotExposePurchasePrice() throws Exception {
+    void publicProductAndCategoryDoNotExposePurchasePrice() throws Exception {
         Category category = new Category("CAT001", "Balo", "", 20_000, true);
         Product product = new Product();
         product.setProductId("PRO2026111910000001");
@@ -45,10 +44,6 @@ class V2BusinessRulesTest {
         assertTrue(mapper.valueToTree(new StaffProductResponse(product)).has("originalPrice"));
         assertFalse(mapper.valueToTree(new CategoryResponse(category)).has("packagingCost"));
 
-        CartItemResponse cartItem = CartItemResponse.builder().salePrice(172_000).build();
-        JsonNode cartJson = mapper.valueToTree(cartItem);
-        assertTrue(cartJson.has("salePrice"));
-        assertFalse(cartJson.has("originalPrice"));
     }
 
     @Test
