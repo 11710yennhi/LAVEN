@@ -48,37 +48,36 @@ public class ShipCostService {
     }
 
     public ShipCost create(ShipCost shipCost) {
-        if (shipCost.getShipCostId() != 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mã phí ship do hệ thống sinh");
+        // shipCostId là PROVINCE_ID của Viettel Post do staff nhập, không tự sinh.
+        if (shipCost.getShipCostId() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cần nhập mã tỉnh/thành hợp lệ");
         }
-        if (shipCostRepository.findByCityIgnoreCase(shipCost.getCity()).isPresent()) {
+        if (shipCostRepository.existsById(shipCost.getShipCostId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Mã tỉnh/thành đã tồn tại");
+        }
+        String city = shipCost.getCity().trim();
+        if (shipCostRepository.findByCityIgnoreCase(city).isPresent()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Tỉnh/thành đã có phí ship");
         }
-        shipCost.setShipCostId(nextShipCostId());
+        shipCost.setCity(city);
         return shipCostRepository.save(shipCost);
     }
 
     public ShipCost update(int id, ShipCost request) {
         ShipCost shipCost = findById(id);
-        if (!shipCost.getCity().equalsIgnoreCase(request.getCity())
-            && shipCostRepository.existsByCityIgnoreCaseAndShipCostIdNot(request.getCity(), id)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Tỉnh/thành đã có phí ship");
+        if (request.getShipCostId() != 0 && request.getShipCostId() != id) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không được đổi mã tỉnh/thành");
         }
-        shipCost.setCity(request.getCity());
+        // Order lưu receiverCity theo tên. Giữ tên ổn định để đơn cũ còn tra phí ship.
+        if (!shipCost.getCity().equals(request.getCity().trim())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Không được đổi tên tỉnh/thành đã tạo");
+        }
         shipCost.setPriceShip(request.getPriceShip());
         return shipCostRepository.save(shipCost);
     }
 
     private String blank(String value) {
         return value == null || value.isBlank() ? null : value.trim();
-    }
-
-    private int nextShipCostId() {
-        return shipCostRepository.findAll().stream()
-            .map(ShipCost::getShipCostId)
-            .filter(id -> id != null)
-            .max(Integer::compareTo)
-            .orElse(0) + 1;
     }
 
     private ResponseStatusException notFound() {

@@ -43,7 +43,6 @@ public interface ColorStockRepository extends JpaRepository<ColorStock, ColorSto
         @Param("maxStock") Integer maxStock,
         @Param("includeInactive") boolean includeInactive
     );
-
     Optional<ColorStock> findByVariant_VariantIdAndColor_ColorId(String variantVariantId, String colorColorId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

@@ -69,13 +69,14 @@ public class ColorStockController {
         return colorStockService.findById(variantId, colorId);
     }
 
-    @PutMapping("/staff/stocks/{variantId}/{colorId}")
-    public ColorStock setStock(
+    // Tạo tồn kho lần đầu. Nhập thêm hàng dùng /adjustment với delta dương.
+    @PostMapping("/staff/stocks/{variantId}/{colorId}")
+    public ColorStock createStock(
         @PathVariable String variantId,
         @PathVariable String colorId,
         @RequestParam Integer quantity
     ) {
-        return colorStockService.setStock(variantId, colorId, quantity);
+        return colorStockService.createStock(variantId, colorId, quantity);
     }
 
     @PostMapping("/staff/stocks/{variantId}/{colorId}/adjustment")

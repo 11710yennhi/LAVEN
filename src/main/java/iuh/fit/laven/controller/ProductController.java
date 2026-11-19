@@ -1,5 +1,7 @@
 package iuh.fit.laven.controller;
 
+import iuh.fit.laven.dto.response.ProductResponse;
+import iuh.fit.laven.dto.response.StaffProductResponse;
 import iuh.fit.laven.model.Product;
 import iuh.fit.laven.service.ProductService;
 import jakarta.validation.Valid;
@@ -17,7 +19,7 @@ public class ProductController {
     }
 
     @GetMapping("/public/products")
-    public List<Product> searchPublicProducts(
+    public List<ProductResponse> searchPublicProducts(
         @RequestParam(required = false) String keyword,
         @RequestParam(required = false) String productId,
         @RequestParam(required = false) String productName,
@@ -28,19 +30,17 @@ public class ProductController {
         @RequestParam(required = false) String size,
         @RequestParam(required = false) String colorId,
         @RequestParam(required = false) Integer minPrice,
-        @RequestParam(required = false) Integer maxPrice,
-        @RequestParam(required = false) Integer minOriginalPrice,
-        @RequestParam(required = false) Integer maxOriginalPrice
+        @RequestParam(required = false) Integer maxPrice
     ) {
         return productService.search(
             keyword, productId, productName, categoryId, brand, origin,
             material, size, colorId, minPrice, maxPrice,
-            minOriginalPrice, maxOriginalPrice, null, false
-        );
+            null, null, null, false
+        ).stream().map(ProductResponse::new).toList();
     }
 
     @GetMapping("/staff/products")
-    public List<Product> searchProducts(
+    public List<StaffProductResponse> searchProducts(
         @RequestParam(required = false) String keyword,
         @RequestParam(required = false) String productId,
         @RequestParam(required = false) String productName,
@@ -60,37 +60,37 @@ public class ProductController {
             keyword, productId, productName, categoryId, brand, origin,
             material, size, colorId, minPrice, maxPrice,
             minOriginalPrice, maxOriginalPrice, status, true
-        );
+        ).stream().map(StaffProductResponse::new).toList();
     }
 
     @GetMapping("/public/products/{productId}")
-    public Product getPublicProduct(@PathVariable String productId) {
-        return productService.findById(productId, false);
+    public ProductResponse getPublicProduct(@PathVariable String productId) {
+        return new ProductResponse(productService.findById(productId, false));
     }
 
     @GetMapping("/staff/products/{productId}")
-    public Product getProduct(@PathVariable String productId) {
-        return productService.findById(productId, true);
+    public StaffProductResponse getProduct(@PathVariable String productId) {
+        return new StaffProductResponse(productService.findById(productId, true));
     }
 
     @PostMapping("/staff/products")
-    public Product createProduct(@Valid @RequestBody Product product) {
-        return productService.create(product);
+    public StaffProductResponse createProduct(@Valid @RequestBody Product product) {
+        return new StaffProductResponse(productService.create(product));
     }
 
     @PutMapping("/staff/products/{productId}")
-    public Product updateProduct(
+    public StaffProductResponse updateProduct(
         @PathVariable String productId,
         @Valid @RequestBody Product product
     ) {
-        return productService.update(productId, product);
+        return new StaffProductResponse(productService.update(productId, product));
     }
 
     @DeleteMapping("/staff/products/{productId}")
-    public Product deactivateProduct(
+    public StaffProductResponse deactivateProduct(
         @PathVariable String productId,
         @RequestParam(required = false) String reason
     ) {
-        return productService.deactivate(productId, reason);
+        return new StaffProductResponse(productService.deactivate(productId, reason));
     }
 }
