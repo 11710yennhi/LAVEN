@@ -1,5 +1,6 @@
 package iuh.fit.laven.model;
 
+import iuh.fit.laven.model.id.CartItemId;
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;

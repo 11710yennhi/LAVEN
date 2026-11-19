@@ -2,7 +2,7 @@ package iuh.fit.laven.service;
 
 import iuh.fit.laven.model.Color;
 import iuh.fit.laven.model.ColorStock;
-import iuh.fit.laven.model.ColorStockId;
+import iuh.fit.laven.model.id.ColorStockId;
 import iuh.fit.laven.model.Product;
 import iuh.fit.laven.model.Variant;
 import iuh.fit.laven.repository.ColorRepository;

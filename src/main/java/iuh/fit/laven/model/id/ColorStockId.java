@@ -1,4 +1,4 @@
-package iuh.fit.laven.model;
+package iuh.fit.laven.model.id;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
@@ -16,14 +16,10 @@ import java.io.Serializable;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode
-public class CartItemId implements Serializable {
-
-    @Column(length = 19, nullable = false)
-    private String cartId;
-
-    @Column(length = 20, nullable = false)
+public class ColorStockId implements Serializable {
+    @Column(name = "variantId", length = 20)
     private String variantId;
 
-    @Column(length = 7, nullable = false)
+    @Column(name = "colorId", length = 7)
     private String colorId;
 }

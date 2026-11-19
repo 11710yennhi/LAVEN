@@ -23,7 +23,7 @@ import iuh.fit.laven.model.Order;
 import iuh.fit.laven.model.OrderDetail;
 import iuh.fit.laven.model.ReturnEvidence;
 import iuh.fit.laven.model.ReturnItem;
-import iuh.fit.laven.model.ReturnItemId;
+import iuh.fit.laven.model.id.ReturnItemId;
 import iuh.fit.laven.model.ReturnRecord;
 import iuh.fit.laven.model.ShipCost;
 import iuh.fit.laven.model.User;
@@ -577,7 +577,7 @@ public class ReturnService {
                 throw new AppException(HttpStatus.BAD_REQUEST, "Số lượng phải lớn hơn 0");
             }
 
-            String itemKey = itemRequest.getVariantId() + "_" + itemRequest.getColorId();
+            String itemKey = itemRequest.getVariantId() + "_" + itemRequest.getColorId().trim().toUpperCase();
             if (!selectedItems.add(itemKey)) {
                 throw new AppException(HttpStatus.BAD_REQUEST, "Không được chọn trùng sản phẩm và màu sắc");
             }

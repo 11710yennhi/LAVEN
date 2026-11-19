@@ -5,6 +5,7 @@ import iuh.fit.laven.model.enums.ReturnStatus;
 import iuh.fit.laven.model.enums.ReturnType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.*;
 
@@ -61,6 +62,7 @@ public class ReturnRecord {
 
     private String refundBankName;
 
+    @Pattern(regexp = "^\\d{6,20}$")
     private String refundAccountNumber;
 
     private String refundAccountName;

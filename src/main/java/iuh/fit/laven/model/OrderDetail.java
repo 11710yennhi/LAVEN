@@ -1,5 +1,5 @@
 package iuh.fit.laven.model;
-import iuh.fit.laven.model.Promotion;
+import iuh.fit.laven.model.id.OrderDetailId;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;

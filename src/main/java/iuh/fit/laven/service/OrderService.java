@@ -8,6 +8,7 @@ import iuh.fit.laven.dto.response.order.*;
 import iuh.fit.laven.exception.AppException;
 import iuh.fit.laven.model.*;
 import iuh.fit.laven.model.enums.*;
+import iuh.fit.laven.model.id.ReturnItemId;
 import iuh.fit.laven.repository.*;
 import iuh.fit.laven.util.IdGenerator;
 import lombok.RequiredArgsConstructor;
@@ -207,7 +208,7 @@ public class OrderService {
         if(newPaymentStatus == null){
             throw new AppException(HttpStatus.BAD_REQUEST, "Trạng thái thanh toán không được để trống");
         }
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByOrderIdForUpdate(orderId)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND,"Không tìm thấy đơn hàng"));
         PaymentStatus currentStatus = order.getPaymentStatus();
         Integer refundAmount = null;
@@ -279,7 +280,7 @@ public class OrderService {
         List<OrderPreviewResponse.Item> previewItems = new ArrayList<>();
         int productTotal = 0;
         for (OrderPreviewRequest.Item item : request.getItems()) {
-            checkDuplicateItem(checkedItems, item.getVariantId(), item.getColorId());
+            checkDuplicateItem(checkedItems, item.getVariantId(), item.getColorId().trim().toUpperCase());
             ColorStock colorStock = colorStockRepository
                     .findByVariant_VariantIdAndColor_ColorId(item.getVariantId(), item.getColorId())
                     .orElseThrow(() -> new AppException(HttpStatus.BAD_REQUEST, "Sản phẩm không có màu này"));
@@ -294,7 +295,6 @@ public class OrderService {
                     .size(priced.variant().getSize())
                     .colorName(priced.color().getName())
                     .quantity(priced.quantity())
-                    .originalPrice(priced.product().getOriginalPrice())
                     .salePrice(priced.salePrice())
                     .productDiscount(priced.productDiscount())
                     .unitPrice(priced.unitPrice())
@@ -456,7 +456,7 @@ public class OrderService {
 
     @Transactional
     public void updateOrderStatus(String orderId, OrderStatus newStatus, String trackingCode, String staffId) {
-        Order order = orderRepository.findById(orderId)
+        Order order = orderRepository.findByOrderIdForUpdate(orderId)
                 .orElseThrow(() -> new AppException(HttpStatus.BAD_REQUEST, "Không tìm thấy đơn hàng"));
         OrderStatus currentStatus = order.getOrderStatus();
         if (currentStatus == newStatus) {
@@ -699,6 +699,7 @@ public class OrderService {
         return CustomerOrderDetailResponse.CancellationResponse.builder()
                 .reason(cancellation.getReason())
                 .cancelledAt(cancellation.getCancelledAt())
+                .compensationPromotionCode(cancellation.getCompensationPromotion().getCode())
                 .build();
     }
 

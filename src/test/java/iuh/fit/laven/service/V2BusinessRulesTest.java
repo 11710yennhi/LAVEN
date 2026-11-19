@@ -7,7 +7,7 @@ import iuh.fit.laven.dto.response.ProductResponse;
 import iuh.fit.laven.dto.response.StaffProductResponse;
 import iuh.fit.laven.model.Category;
 import iuh.fit.laven.model.ColorStock;
-import iuh.fit.laven.model.ColorStockId;
+import iuh.fit.laven.model.id.ColorStockId;
 import iuh.fit.laven.model.Product;
 import iuh.fit.laven.model.ShipCost;
 import iuh.fit.laven.repository.CategoryRepository;
