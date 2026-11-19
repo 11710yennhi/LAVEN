@@ -60,7 +60,7 @@ public class OrderController {
         return orderService.previewOrder(me.getUserId(), request);
     }
 
-    @PostMapping
+    @PostMapping("/customer/orders")
     public CreateOrderResponse createOrder(@Valid @RequestBody CreateOrderRequest request,
                                             @AuthenticationPrincipal CustomUserDetails me) {
         return orderService.createOrder(me.getUserId(), request);
