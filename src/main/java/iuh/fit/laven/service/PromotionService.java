@@ -99,6 +99,10 @@ public class PromotionService {
         if (p.getCustomer() != null || TEMPLATE_CODE.equals(p.getCode())) {
             throw new AppException(HttpStatus.FORBIDDEN, "Chỉ Admin được sửa mã bồi thường và mã mẫu");
         }
+        if (request.getApplyType() != null && request.getApplyType() != p.getApplyType()) {
+            throw new AppException(HttpStatus.CONFLICT,
+                    "Không được đổi loại áp dụng của khuyến mãi đã tạo, vui lòng tạo khuyến mãi mới");
+        }
         applyRequest(p, request, false);
         promotionRepository.save(p);
         saveScope(p, request);
@@ -166,6 +170,9 @@ public class PromotionService {
         }
         if (max > 100) {
             throw bad("Giá trị giảm tối đa của mã mẫu là phần trăm, không được vượt quá 100");
+        }
+        if (request.getDiscountType() == DiscountType.PERCENT && max == 0) {
+            throw bad("Mã mẫu giảm theo phần trăm phải có mức giảm tối đa lớn hơn 0");
         }
         t.setDiscountType(request.getDiscountType());
         t.setDiscountValue(value);
