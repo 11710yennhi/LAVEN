@@ -1,5 +1,6 @@
 package iuh.fit.laven.controller;
 
+import iuh.fit.laven.dto.response.CategoryResponse;
 import iuh.fit.laven.model.Category;
 import iuh.fit.laven.service.CategoryService;
 import jakarta.validation.Valid;
@@ -17,13 +18,12 @@ public class CategoryController {
     }
 
     @GetMapping("/public/categories")
-    public List<Category> getPublicCategories(
+    public List<CategoryResponse> getPublicCategories(
         @RequestParam(required = false) String keyword,
-        @RequestParam(required = false) String categoryName,
-        @RequestParam(required = false) Integer minPackagingCost,
-        @RequestParam(required = false) Integer maxPackagingCost
+        @RequestParam(required = false) String categoryName
     ) {
-        return categoryService.search(keyword, categoryName, minPackagingCost, maxPackagingCost, null, false);
+        return categoryService.search(keyword, categoryName, null, null, null, false)
+            .stream().map(CategoryResponse::new).toList();
     }
 
     @GetMapping("/staff/categories")

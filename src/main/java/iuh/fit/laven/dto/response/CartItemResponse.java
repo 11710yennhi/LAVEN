@@ -19,7 +19,7 @@ public class CartItemResponse {
     private String productName;
     private String size;
     private int quantity;       // số lượng sau khi (nếu cần) bị cắt về mức cho phép
-    private int originalPrice;  // salePrice
+    private int salePrice;      // Giá bán trước khuyến mãi, không phải giá nhập
     private int unitPrice;      // giá sau khuyến mãi sản phẩm tốt nhất
     private int subtotal;       // quantity × unitPrice (0 nếu không mua được)
     private int stock;

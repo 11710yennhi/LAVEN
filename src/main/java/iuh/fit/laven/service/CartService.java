@@ -228,7 +228,7 @@ public class CartService {
                 .productName(product.getProductName())
                 .size(stock.getVariant().getSize())
                 .quantity(effectiveQuantity)
-                .originalPrice(salePrice)
+                .salePrice(salePrice)
                 .unitPrice(unitPrice)
                 .subtotal(available ? effectiveQuantity * unitPrice : 0)
                 .stock(inStock)

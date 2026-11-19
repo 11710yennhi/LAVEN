@@ -79,14 +79,17 @@ public class ColorStockService {
             .orElseThrow(() -> notFound("Tồn kho biến thể-màu"));
     }
 
-    public ColorStock setStock(String variantId, String colorId, Integer quantity) {
+    public ColorStock createStock(String variantId, String colorId, Integer quantity) {
         if (quantity == null || quantity < 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tồn kho phải >= 0");
         }
 
         ColorStockId id = new ColorStockId(variantId, colorId);
-        ColorStock stock = colorStockRepository.findLocked(id)
-            .orElseGet(() -> createStock(variantId, colorId, id));
+        // Chỉ tạo dòng tồn kho ban đầu; nhập thêm hàng dùng adjustStock(delta).
+        if (colorStockRepository.existsById(id)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Tồn kho đã tồn tại; hãy dùng điều chỉnh số lượng");
+        }
+        ColorStock stock = buildStock(variantId, colorId, id);
         stock.setStock(quantity);
         return colorStockRepository.save(stock);
     }
@@ -102,7 +105,7 @@ public class ColorStockService {
         return colorStockRepository.save(stock);
     }
 
-    private ColorStock createStock(String variantId, String colorId, ColorStockId id) {
+    private ColorStock buildStock(String variantId, String colorId, ColorStockId id) {
         Variant variant = variantRepository.findById(variantId)
             .orElseThrow(() -> notFound("Biến thể"));
         Color color = colorRepository.findById(colorId)

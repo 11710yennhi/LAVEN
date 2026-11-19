@@ -157,7 +157,7 @@ public class ProductService {
         String second = now.format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
         int hundredth = now.getNano() / 10_000_000;
         for (int offset = 0; offset < 100; offset++) {
-            String id = "PRD" + second + String.format("%02d", (hundredth + offset) % 100);
+            String id = "PRO" + second + String.format("%02d", (hundredth + offset) % 100);
             if (!productRepository.existsById(id)) {
                 return id;
             }
