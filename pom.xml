@@ -84,6 +84,13 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Firebase Admin chỉ tạo custom token; trình duyệt lưu tin nhắn vào Realtime Database. -->
+        <dependency>
+            <groupId>com.google.firebase</groupId>
+            <artifactId>firebase-admin</artifactId>
+            <version>9.12.0</version>
+        </dependency>
+
         <!-- Cloudinary: upload ảnh/video, DB chỉ lưu URL -->
         <dependency>
             <groupId>com.cloudinary</groupId>

@@ -116,6 +116,9 @@ public class Order {
     @Column(nullable = false, length = 14)
     private PaymentStatus paymentStatus;
     private LocalDateTime paidAt;
+    // Chỉ có khi nhân viên xác nhận thủ công sau khi kiểm tra sao kê ngân hàng.
+    @Column(length = 100, unique = true)
+    private String manualPaymentReference;
     private LocalDateTime refundedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)

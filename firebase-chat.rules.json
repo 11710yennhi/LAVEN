@@ -1,0 +1,20 @@
+{
+  "rules": {
+    "chats": {
+      ".read": "auth != null && (auth.token.role === 'STAFF' || auth.token.role === 'ADMIN')",
+      "$customerId": {
+        ".read": "auth != null && auth.token.role === 'CUSTOMER' && auth.uid === $customerId",
+        "messages": {
+          "$messageId": {
+            ".write": "auth != null && !data.exists() && newData.exists() && newData.child('senderId').val() === auth.uid && ((auth.token.role === 'CUSTOMER' && auth.uid === $customerId) || auth.token.role === 'STAFF' || auth.token.role === 'ADMIN')",
+            ".validate": "newData.hasChildren(['senderId', 'content', 'sentAt'])",
+            "senderId": { ".validate": "newData.isString()" },
+            "content": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 1000" },
+            "sentAt": { ".validate": "newData.isString() && newData.val().length === 19" },
+            "$other": { ".validate": false }
+          }
+        }
+      }
+    }
+  }
+}

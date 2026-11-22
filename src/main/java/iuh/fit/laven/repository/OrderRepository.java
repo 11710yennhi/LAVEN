@@ -15,6 +15,8 @@ import java.util.Optional;
 
 public interface OrderRepository extends JpaRepository<Order, String>, JpaSpecificationExecutor<Order> {
 
+    boolean existsByManualPaymentReference(String manualPaymentReference);
+
     Order findOrderByOrderIdIsAndCustomer_UserId(String orderId, String customerUserId);
 
     Order findOrderByOrderIdIs(String orderId);

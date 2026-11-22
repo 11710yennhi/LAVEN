@@ -56,6 +56,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
+                        // SePay không có JWT LAVEN; BankPaymentService tự xác thực API Key.
+                        .requestMatchers(HttpMethod.POST, "/api/payments/webhook").permitAll()
                         // change-password cần đăng nhập, phải đặt TRƯỚC dòng /auth/** bên dưới
                         .requestMatchers("/api/auth/change-password").authenticated()
                         .requestMatchers("/api/auth/**").permitAll()

@@ -21,6 +21,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.time.LocalDateTime;
@@ -150,29 +151,28 @@ public class OrderService {
         if (order.getPaymentMethod() != PaymentMethod.BANK_TRANSFER) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Đơn hàng không sử dụng phương thức chuyển khoản");
         }
-        // Thiết kế i.6: chỉ trả QR khi đơn còn chờ xác nhận và thanh toán PENDING hoặc FAILED (chuyển lại)
-        if (order.getOrderStatus() != OrderStatus.PENDING) {
-            throw new AppException(HttpStatus.BAD_REQUEST, "Đơn hàng không còn ở trạng thái chờ xác nhận");
-        }
-        if (order.getPaymentStatus() != PaymentStatus.PENDING && order.getPaymentStatus() != PaymentStatus.FAILED) {
-            throw new AppException(HttpStatus.BAD_REQUEST, "Đơn hàng không còn ở trạng thái chờ thanh toán");
-        }
+        // Trang React gọi lại endpoint này sau khi webhook đã xác nhận, nên vẫn trả thông tin đơn.
+        // QR chỉ có khi còn chờ chuyển khoản; React cần ẩn QR khi paymentStatus = PAID.
         Integer amount = order.getTotalAmount();
         String transferContent = order.getOrderId();
-        String qrCodeUrl = generateVietQrCodeUrl(amount, transferContent);
+        String qrCodeUrl = order.getOrderStatus() == OrderStatus.PENDING
+                && (order.getPaymentStatus() == PaymentStatus.PENDING
+                    || order.getPaymentStatus() == PaymentStatus.WAITING
+                    || order.getPaymentStatus() == PaymentStatus.FAILED)
+                ? generateVietQrCodeUrl(amount, transferContent) : null;
         return PaymentQrResponse.builder()
                 .orderId(order.getOrderId())
-                .bankName(vietQrBankName)
-                .bankAccount(vietQrAccountNumber)
+                .bankId(vietQrBankId)
+                .accountNo(vietQrAccountNumber)
                 .accountName(vietQrAccountName)
                 .amount(amount)
-                .transferContent(transferContent)
-                .qrCodeUrl(qrCodeUrl)
+                .content(transferContent)
+                .qrUrl(qrCodeUrl)
                 .paymentStatus(order.getPaymentStatus())
                 .build();
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public PaymentNotifyResponse notifyCustomerPayment(String orderId, String customerId) {
         Order order = orderRepository.findOrderByOrderIdIsAndCustomer_UserId(orderId, customerId);
         if (order == null) {
@@ -181,25 +181,50 @@ public class OrderService {
         if (order.getPaymentMethod() != PaymentMethod.BANK_TRANSFER) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Đơn hàng không sử dụng phương thức chuyển khoản");
         }
-        // Bảng chuyển trạng thái PaymentStatus: PENDING/FAILED → WAITING chỉ khi đơn đang PENDING
+        // API cũ của React: nút "Tôi đã chuyển khoản" không phải bằng chứng tiền vào.
+        // Giữ endpoint để frontend cũ không lỗi, nhưng chỉ webhook/nhân viên mới đổi trạng thái.
         if (order.getOrderStatus() != OrderStatus.PENDING) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Chỉ báo chuyển khoản cho đơn đang chờ xác nhận");
         }
-        if (order.getPaymentStatus() == PaymentStatus.WAITING) {
-            return PaymentNotifyResponse.builder()
-                    .orderId(order.getOrderId())
-                    .paymentStatus(order.getPaymentStatus())
-                    .message("Đơn hàng đã được ghi nhận thông báo chuyển khoản")
-                    .build();
-        }
-        if (order.getPaymentStatus() != PaymentStatus.PENDING && order.getPaymentStatus() != PaymentStatus.FAILED) {
-            throw new AppException(HttpStatus.BAD_REQUEST, "Đơn hàng không ở trạng thái cho phép thông báo chuyển khoản");
-        }
-        order.setPaymentStatus(PaymentStatus.WAITING);
         return PaymentNotifyResponse.builder()
                 .orderId(order.getOrderId())
                 .paymentStatus(order.getPaymentStatus())
-                .message("Đã ghi nhận thông báo chuyển khoản. Vui lòng chờ nhân viên xác nhận.")
+                .message("Đơn đang chờ SePay xác nhận; nếu chậm, liên hệ nhân viên hỗ trợ.")
+                .build();
+    }
+
+    @Transactional
+    public StaffOrderPaymentResponse confirmBankTransferManually(String orderId, String staffId,
+                                                                  String bankReference) {
+        // Nhân viên phải đối chiếu tài khoản, số tiền và mã đơn trên sao kê trước khi gọi API này.
+        Order order = orderRepository.findByOrderIdForUpdate(orderId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Không tìm thấy đơn hàng"));
+        if (order.getPaymentMethod() != PaymentMethod.BANK_TRANSFER
+                || order.getOrderStatus() != OrderStatus.PENDING
+                || (order.getPaymentStatus() != PaymentStatus.PENDING
+                    && order.getPaymentStatus() != PaymentStatus.WAITING
+                    && order.getPaymentStatus() != PaymentStatus.FAILED)) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Đơn không còn chờ xác nhận chuyển khoản");
+        }
+        String reference = bankReference.trim();
+        if (orderRepository.existsByManualPaymentReference(reference)) {
+            throw new AppException(HttpStatus.CONFLICT, "Mã giao dịch đã dùng để xác nhận đơn khác");
+        }
+        User staff = userRepository.findById(staffId)
+                .orElseThrow(() -> new AppException(HttpStatus.UNAUTHORIZED, "Không tìm thấy nhân viên"));
+        LocalDateTime now = LocalDateTime.now();
+        order.setPaymentStatus(PaymentStatus.PAID);
+        order.setPaidAt(now);
+        order.setOrderStatus(OrderStatus.CONFIRMED);
+        order.setConfirmedAt(now);
+        order.setConfirmedBy(staff);
+        order.setManualPaymentReference(reference);
+        return StaffOrderPaymentResponse.builder()
+                .orderId(orderId)
+                .paymentMethod(order.getPaymentMethod())
+                .paymentStatus(PaymentStatus.PAID)
+                .paidAt(now)
+                .message("Nhân viên đã xác nhận chuyển khoản sau khi đối chiếu sao kê")
                 .build();
     }
 
@@ -215,9 +240,8 @@ public class OrderService {
         String message;
         if (newPaymentStatus == PaymentStatus.PAID) {
             if (order.getPaymentMethod() == PaymentMethod.BANK_TRANSFER) {
-                if (currentStatus != PaymentStatus.WAITING) {
-                    throw new AppException(HttpStatus.BAD_REQUEST, "Đơn chuyển khoản phải ở trạng thái chờ xác nhận thanh toán");
-                }
+                throw new AppException(HttpStatus.BAD_REQUEST,
+                        "Dùng API xác nhận thủ công kèm mã giao dịch sau khi kiểm tra sao kê");
             } else if (order.getPaymentMethod() == PaymentMethod.COD) {
                 if (currentStatus != PaymentStatus.PENDING || order.getOrderStatus() != OrderStatus.DELIVERED) {
                     throw new AppException(HttpStatus.BAD_REQUEST, "Đơn COD phải đã giao hàng và đang chờ thanh toán");
@@ -680,6 +704,10 @@ public class OrderService {
 
 
     private String generateVietQrCodeUrl(Integer amount, String transferContent) {
+        if (!StringUtils.hasText(vietQrBankId) || !StringUtils.hasText(vietQrAccountNumber)
+                || !StringUtils.hasText(vietQrAccountName)) {
+            throw new AppException(HttpStatus.SERVICE_UNAVAILABLE, "Chưa cấu hình tài khoản nhận tiền VietQR");
+        }
         return UriComponentsBuilder
                 .fromUriString("https://img.vietqr.io/image/"+ vietQrBankId + "-"
                         + vietQrAccountNumber + "-compact2.png")
@@ -807,6 +835,7 @@ public class OrderService {
                 .paidAt(order.getPaidAt())
                 .refundedAt(order.getRefundedAt())
                 .confirmedById(confirmedBy != null ? confirmedBy.getUserId() : null)
+                .manualPaymentReference(order.getManualPaymentReference())
                 .confirmedByName(confirmedBy != null ? confirmedBy.getFullName() : null)
                 .confirmedAt(order.getConfirmedAt())
                 .trackingCode(order.getTrackingCode())
