@@ -12,6 +12,9 @@ Sau khi tạo đơn `BANK_TRANSFER`, `OrderService` trả link VietQR có số t
 `totalAmount` và nội dung `orderId`. `GET /api/customer/orders/{id}/payment-qr`
 trả các field gốc của nhóm Hà: `bankName`, `bankAccount`, `accountName`,
 `amount`, `transferContent`, `qrCodeUrl`, `paymentStatus`.
+`PaymentQrResponseCompatibility` bổ sung `bankId`, `accountNo`, `content`,
+`qrUrl` vào cùng JSON để trang thanh toán React đọc được, không đổi field gốc
+hay đường dẫn API của Hà.
 SePay gửi webhook; `BankPaymentService` kiểm tra API key, tài khoản, mã đơn,
 số tiền và ID giao dịch. Một transaction MariaDB lưu `bank_transactions`,
 chuyển `paymentStatus=PAID`, `orderStatus=CONFIRMED` và ghi thời điểm.
@@ -43,7 +46,9 @@ Trong Firebase Console > Realtime Database > Rules, dùng nội dung
 `localStorage` sang Firebase SDK, đăng nhập bằng custom token và dùng các field
 tiếng Anh trên. Hiện frontend chưa thực hiện bước này.
 
-Frontend `PaymentPage.jsx` hiện đọc `bankId/accountNo/content/qrUrl` khác tên
-field backend của Hà, còn nút “Tôi đã chuyển khoản” và QR minh họa. Cần nhóm Hà
-đồng ý thay API cũ hoặc frontend sửa tên field, bỏ nút khỏi luồng webhook và ẩn
-QR khi `PAID`. Frontend chưa được sửa trong lần này.
+Frontend `PaymentPage.jsx` đã đọc được QR nhờ các field bổ sung, nhưng vẫn còn
+nút “Tôi đã chuyển khoản” gọi endpoint cũ, và trang nhân viên vẫn gọi API xác
+nhận cũ. Backend tự đổi `PAID/CONFIRMED` từ webhook không phụ thuộc nút này.
+Để dùng thao tác xác nhận thủ công trên giao diện, frontend phải gọi endpoint
+`/payment/manual` cùng dữ liệu giao dịch đã đối chiếu; frontend chưa được sửa
+trong lần tích hợp backend này.
