@@ -34,7 +34,6 @@ public class StaffOrderDetailResponse {
     private PaymentMethod paymentMethod;
     private PaymentStatus paymentStatus;
     private LocalDateTime paidAt;
-    private String manualPaymentReference;
     private LocalDateTime refundedAt;
     private String confirmedById;
     private String confirmedByName;

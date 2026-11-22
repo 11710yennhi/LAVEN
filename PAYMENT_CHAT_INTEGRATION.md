@@ -10,21 +10,24 @@ Khi chạy localhost, dùng ngrok để SePay gọi được URL này.
 
 Sau khi tạo đơn `BANK_TRANSFER`, `OrderService` trả link VietQR có số tiền
 `totalAmount` và nội dung `orderId`. `GET /api/customer/orders/{id}/payment-qr`
-trả các field `bankId`, `accountNo`, `accountName`, `amount`, `content`, `qrUrl`.
+trả các field gốc của nhóm Hà: `bankName`, `bankAccount`, `accountName`,
+`amount`, `transferContent`, `qrCodeUrl`, `paymentStatus`.
 SePay gửi webhook; `BankPaymentService` kiểm tra API key, tài khoản, mã đơn,
 số tiền và ID giao dịch. Một transaction MariaDB lưu `bank_transactions`,
 chuyển `paymentStatus=PAID`, `orderStatus=CONFIRMED` và ghi thời điểm.
 React chỉ đọc trạng thái đơn, không được tự xác nhận thanh toán.
-Luồng mới dùng `PENDING -> PAID`; endpoint `payment-notify` cũ vẫn trả lời
-frontend nhưng không đổi trạng thái sang `WAITING`. Enum cũ được giữ để đọc
-những đơn đã lưu từ trước.
+Webhook tự đổi `PENDING -> PAID` và `PENDING -> CONFIRMED`. Endpoint
+`payment-notify` và API nhân viên cũ của nhóm Hà được giữ nguyên; cần thống nhất
+với Hà trước khi thay luồng cũ ở frontend.
 
 Nếu webhook lỗi nhưng tiền đã vào tài khoản, nhân viên kiểm tra sao kê rồi gọi
 `POST /api/staff/orders/{id}/payment/manual` bằng JWT STAFF/ADMIN với JSON
-`{"bankReference":"<ma-giao-dich-tren-sao-ke>"}`. Server lưu mã tham chiếu
-trên `orders.manualPaymentReference`, `confirmedBy` là nhân viên và đổi
-`PAID/CONFIRMED` trong cùng transaction. Xác nhận thủ công không tạo bản ghi
-SePay giả trong `bank_transactions`. Mã tham chiếu không được dùng cho đơn khác.
+`{"bankReference":"FT123","accountNumber":"5817102004","amountIn":2000,
+"transferContent":"ORD...","transactionDate":"2026-11-22T12:30:00"}`.
+Server đối chiếu tài khoản, số tiền, mã đơn và mã tham chiếu; lưu bản ghi
+`bank_transactions` có `gateway=MANUAL_VERIFIED` và `transactionId=MANUAL:FT123`
+để phân biệt với webhook SePay. `confirmedBy` là nhân viên; đơn đổi
+`PAID/CONFIRMED` trong cùng transaction. Không được dùng mã tham chiếu hai lần.
 
 ## Chat
 
@@ -40,6 +43,7 @@ Trong Firebase Console > Realtime Database > Rules, dùng nội dung
 `localStorage` sang Firebase SDK, đăng nhập bằng custom token và dùng các field
 tiếng Anh trên. Hiện frontend chưa thực hiện bước này.
 
-Frontend `PaymentPage.jsx` hiện còn nút “Tôi đã chuyển khoản” và hiển thị QR
-minh họa khi `qrUrl` rỗng. Khi nối frontend thật, cần bỏ nút này khỏi luồng
-webhook, ẩn QR khi `PAID`, và gọi lại `getMyOrder` để thấy trạng thái mới.
+Frontend `PaymentPage.jsx` hiện đọc `bankId/accountNo/content/qrUrl` khác tên
+field backend của Hà, còn nút “Tôi đã chuyển khoản” và QR minh họa. Cần nhóm Hà
+đồng ý thay API cũ hoặc frontend sửa tên field, bỏ nút khỏi luồng webhook và ẩn
+QR khi `PAID`. Frontend chưa được sửa trong lần này.

@@ -10,11 +10,11 @@ import lombok.*;
 @AllArgsConstructor
 public class PaymentQrResponse {
     private String orderId;
-    private String bankId;
-    private String accountNo;
+    private String bankName;
+    private String bankAccount;
     private String accountName;
     private Integer amount;
-    private String content;
-    private String qrUrl;
+    private String transferContent;
+    private String qrCodeUrl;
     private PaymentStatus paymentStatus;
 }

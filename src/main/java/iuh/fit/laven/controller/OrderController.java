@@ -1,7 +1,6 @@
 package iuh.fit.laven.controller;
 
 import iuh.fit.laven.dto.request.order.CreateOrderRequest;
-import iuh.fit.laven.dto.request.order.ManualPaymentRequest;
 import iuh.fit.laven.dto.request.order.OrderPreviewRequest;
 import iuh.fit.laven.dto.request.order.StaffOrderFilterRequest;
 import iuh.fit.laven.dto.response.OrderPreviewResponse;
@@ -89,14 +88,6 @@ public class OrderController {
     public StaffOrderPaymentResponse updateOrderPayment(@PathVariable String id,
                                                         @RequestParam(required = false) PaymentStatus paymentStatus){
         return orderService.updateOrderPayment(id, paymentStatus);
-    }
-
-    /** Nhân viên đã kiểm tra sao kê: xác nhận đơn chuyển khoản khi webhook bị lỗi. */
-    @PostMapping("/staff/orders/{id}/payment/manual")
-    public StaffOrderPaymentResponse confirmBankTransferManually(@PathVariable String id,
-            @Valid @RequestBody ManualPaymentRequest request,
-            @AuthenticationPrincipal CustomUserDetails staff) {
-        return orderService.confirmBankTransferManually(id, staff.getUserId(), request.getBankReference());
     }
 
     @PutMapping("/staff/orders/{id}/status")
