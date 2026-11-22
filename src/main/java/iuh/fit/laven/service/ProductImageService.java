@@ -13,6 +13,8 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -32,7 +34,17 @@ public class ProductImageService {
     @Transactional(readOnly = true)
     public List<ProductImage> findByProduct(String productId, boolean includeInactiveProduct) {
         requireProduct(productId, includeInactiveProduct);
-        return imageRepository.findByProductProductId(productId);
+        return imageRepository.findByProductProductIdOrderByProductImageIdAsc(productId);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, String> findCoverUrls(List<String> productIds) {
+        if (productIds.isEmpty()) {
+            return Map.of();
+        }
+        return imageRepository.findCovers(productIds).stream()
+            .collect(Collectors.toMap(ProductImageRepository.CoverImage::getProductId,
+                                      ProductImageRepository.CoverImage::getImageUrl));
     }
 
     @Transactional(readOnly = true)

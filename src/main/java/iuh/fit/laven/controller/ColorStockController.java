@@ -1,5 +1,6 @@
 package iuh.fit.laven.controller;
 
+import org.springframework.http.MediaType;
 import iuh.fit.laven.model.ColorStock;
 import iuh.fit.laven.service.ColorStockService;
 import org.springframework.web.bind.annotation.*;
@@ -7,7 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping(value = "/api", produces = MediaType.APPLICATION_JSON_VALUE)
 public class ColorStockController {
     private final ColorStockService colorStockService;
 

@@ -1,5 +1,6 @@
 package iuh.fit.laven.controller;
 
+import org.springframework.http.MediaType;
 import iuh.fit.laven.model.ShipCost;
 import iuh.fit.laven.service.ShipCostService;
 import jakarta.validation.Valid;
@@ -8,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping(value = "/api", produces = MediaType.APPLICATION_JSON_VALUE)
 public class ShipCostController {
     private final ShipCostService shipCostService;
 

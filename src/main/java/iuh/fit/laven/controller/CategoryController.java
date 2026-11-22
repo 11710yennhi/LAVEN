@@ -1,5 +1,6 @@
 package iuh.fit.laven.controller;
 
+import org.springframework.http.MediaType;
 import iuh.fit.laven.dto.response.CategoryResponse;
 import iuh.fit.laven.model.Category;
 import iuh.fit.laven.service.CategoryService;
@@ -9,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping(value = "/api", produces = MediaType.APPLICATION_JSON_VALUE)
 public class CategoryController {
     private final CategoryService categoryService;
 
