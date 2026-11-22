@@ -1,5 +1,6 @@
 package iuh.fit.laven.controller;
 
+import org.springframework.http.MediaType;
 import iuh.fit.laven.dto.request.order.ManualPaymentRequest;
 import iuh.fit.laven.dto.response.order.StaffOrderPaymentResponse;
 import iuh.fit.laven.security.CustomUserDetails;
@@ -15,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** API ngoại lệ cho nhân viên; bình thường SePay webhook tự xác nhận đơn. */
 @RestController
-@RequestMapping("/api/staff/orders")
+@RequestMapping(value = "/api/staff/orders", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
 public class ManualBankPaymentController {
     private final ManualBankPaymentService manualBankPaymentService;

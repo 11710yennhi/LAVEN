@@ -1,8 +1,10 @@
 package iuh.fit.laven.controller;
 
+import org.springframework.http.MediaType;
 import iuh.fit.laven.dto.response.ProductResponse;
 import iuh.fit.laven.dto.response.StaffProductResponse;
 import iuh.fit.laven.model.Product;
+import iuh.fit.laven.service.ProductImageService;
 import iuh.fit.laven.service.ProductService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -10,12 +12,14 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping(value = "/api", produces = MediaType.APPLICATION_JSON_VALUE)
 public class ProductController {
     private final ProductService productService;
+    private final ProductImageService productImageService;
 
-    public ProductController(ProductService productService) {
+    public ProductController(ProductService productService, ProductImageService productImageService) {
         this.productService = productService;
+        this.productImageService = productImageService;
     }
 
     @GetMapping("/public/products")
@@ -32,11 +36,15 @@ public class ProductController {
         @RequestParam(required = false) Integer minPrice,
         @RequestParam(required = false) Integer maxPrice
     ) {
-        return productService.search(
+        List<Product> products = productService.search(
             keyword, productId, productName, categoryId, brand, origin,
             material, size, colorId, minPrice, maxPrice,
             null, null, null, false
-        ).stream().map(ProductResponse::new).toList();
+        );
+        var coverUrls = productImageService.findCoverUrls(products.stream().map(Product::getProductId).toList());
+        return products.stream()
+            .map(product -> new ProductResponse(product, coverUrls.get(product.getProductId())))
+            .toList();
     }
 
     @GetMapping("/staff/products")

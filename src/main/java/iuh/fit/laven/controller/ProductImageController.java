@@ -1,5 +1,6 @@
 package iuh.fit.laven.controller;
 
+import org.springframework.http.MediaType;
 import iuh.fit.laven.dto.request.ProductImageRequest;
 import iuh.fit.laven.dto.response.MessageResponse;
 import iuh.fit.laven.dto.response.ProductImageUploadSignatureResponse;
@@ -11,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping(value = "/api", produces = MediaType.APPLICATION_JSON_VALUE)
 public class ProductImageController {
     private final ProductImageService productImageService;
 

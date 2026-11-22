@@ -1,5 +1,6 @@
 package iuh.fit.laven.controller;
 
+import org.springframework.http.MediaType;
 import iuh.fit.laven.dto.request.SepayWebhookRequest;
 import iuh.fit.laven.dto.response.WebhookAckResponse;
 import iuh.fit.laven.service.BankPaymentService;
@@ -13,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** SePay gọi API này qua URL công khai của LAVEN, không phải React gọi. */
 @RestController
-@RequestMapping("/api/payments")
+@RequestMapping(value = "/api/payments", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
 public class PaymentWebhookController {
     private final BankPaymentService bankPaymentService;

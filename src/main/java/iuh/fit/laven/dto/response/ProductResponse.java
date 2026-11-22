@@ -1,5 +1,6 @@
 package iuh.fit.laven.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import iuh.fit.laven.model.Product;
 import lombok.Getter;
 
@@ -20,8 +21,14 @@ public class ProductResponse {
     private final String zipper;
     private final String warranty;
     private final Integer maxQuantityPerOrder;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private final String imageUrl;
 
     public ProductResponse(Product product) {
+        this(product, null);
+    }
+
+    public ProductResponse(Product product, String imageUrl) {
         this.productId = product.getProductId();
         this.productName = product.getProductName();
         this.categoryId = product.getCategory().getCategoryId();
@@ -36,5 +43,6 @@ public class ProductResponse {
         this.zipper = product.getZipper();
         this.warranty = product.getWarranty();
         this.maxQuantityPerOrder = product.getMaxQuantityPerOrder();
+        this.imageUrl = imageUrl;
     }
 }
