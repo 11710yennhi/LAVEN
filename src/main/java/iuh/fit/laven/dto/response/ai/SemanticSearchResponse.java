@@ -24,8 +24,11 @@ public class SemanticSearchResponse {
         /** Thông tin sản phẩm công khai (DTO có sẵn, không lộ giá nhập). */
         private final ProductResponse product;
 
-        /** Giá sau khuyến mãi sản phẩm tốt nhất, đọc từ DB lúc tìm. */
+        /** Giá sau khuyến mãi thấp nhất trong các size khớp khoảng giá ("Từ X₫"), đọc từ DB lúc tìm. */
         private final Integer finalPrice;
+
+        /** Giá sau khuyến mãi cao nhất trong các size khớp khoảng giá. */
+        private final Integer maxFinalPrice;
 
         /** Tổng tồn kho của mọi biến thể–màu, đọc từ DB lúc tìm (0 = hết hàng). */
         private final Integer stock;

@@ -1,6 +1,7 @@
 package iuh.fit.laven.service.ai;
 
 import iuh.fit.laven.dto.response.ProductResponse;
+import iuh.fit.laven.dto.response.SalePriceRange;
 import iuh.fit.laven.dto.response.ai.SemanticSearchResponse;
 import iuh.fit.laven.dto.response.ai.SemanticSearchResponse.Item;
 import iuh.fit.laven.exception.AppException;
@@ -8,6 +9,7 @@ import iuh.fit.laven.model.ColorStock;
 import iuh.fit.laven.model.Product;
 import iuh.fit.laven.repository.ColorStockRepository;
 import iuh.fit.laven.repository.ProductRepository;
+import iuh.fit.laven.repository.VariantRepository;
 import iuh.fit.laven.service.ProductService;
 import iuh.fit.laven.service.PromotionService;
 import iuh.fit.laven.service.PromotionService.ScopedPromotion;
@@ -24,6 +26,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -43,6 +46,7 @@ public class SemanticSearchService {
     private final VectorStore vectorStore;
     private final ProductRepository productRepository;
     private final ColorStockRepository colorStockRepository;
+    private final VariantRepository variantRepository;
     private final ProductService productService;
     private final PromotionService promotionService;
     private final ProductDocumentMapper mapper;
@@ -52,6 +56,7 @@ public class SemanticSearchService {
     public SemanticSearchService(VectorStore vectorStore,
                                  ProductRepository productRepository,
                                  ColorStockRepository colorStockRepository,
+                                 VariantRepository variantRepository,
                                  ProductService productService,
                                  PromotionService promotionService,
                                  ProductDocumentMapper mapper,
@@ -60,6 +65,7 @@ public class SemanticSearchService {
         this.vectorStore = vectorStore;
         this.productRepository = productRepository;
         this.colorStockRepository = colorStockRepository;
+        this.variantRepository = variantRepository;
         this.productService = productService;
         this.promotionService = promotionService;
         this.mapper = mapper;
@@ -123,7 +129,8 @@ public class SemanticSearchService {
                         null, null, null, null, null, null, false).stream()
                 .filter(p -> !p.getProductId().equals(product.getProductId()))
                 .limit(limit)
-                .map(p -> toItem(p, null, actives))
+                .map(p -> toItem(p, null, actives, null, null))
+                .filter(Objects::nonNull)
                 .toList();
     }
 
@@ -173,8 +180,8 @@ public class SemanticSearchService {
             if (product == null || !ProductIndexService.isSelling(product)) {
                 continue;
             }
-            Item item = toItem(product, entry.getValue(), actives);
-            if (inPriceRange(item.getFinalPrice(), minPrice, maxPrice)) {
+            Item item = toItem(product, entry.getValue(), actives, minPrice, maxPrice);
+            if (item != null) {
                 items.add(item);
             }
             if (items.size() == limit) {
@@ -188,22 +195,49 @@ public class SemanticSearchService {
                                      Integer minPrice, Integer maxPrice, int limit) {
         List<ScopedPromotion> actives = promotionService.loadActiveProductPromotions();
         return productService.search(query, categoryId, null, null, null, null, null, null, false).stream()
-                .map(p -> toItem(p, null, actives))
-                .filter(item -> inPriceRange(item.getFinalPrice(), minPrice, maxPrice))
+                .map(p -> toItem(p, null, actives, minPrice, maxPrice))
+                .filter(Objects::nonNull)
                 .limit(limit)
                 .toList();
     }
 
-    private Item toItem(Product product, Double score, List<ScopedPromotion> actives) {
-        int salePrice = product.getSalePrice();
-        int discount = promotionService.findBestProductPromotion(product, actives)
-                .map(PromotionService.AppliedPromotion::discount)
-                .orElse(0);
+    /**
+     * Giá nằm ở Variant: tính giá cuối (sau khuyến mãi) của từng size, chỉ giữ size nằm trong khoảng giá.
+     * Trả null nếu không có size nào khớp (sản phẩm bị loại).
+     * Service không có transaction và Variant.product là LAZY, nên giá bán tính bằng product.calcSalePrice(...)
+     * từ product đang có trong tay (category EAGER), không gọi variant.getProduct().
+     */
+    private Item toItem(Product product, Double score, List<ScopedPromotion> actives,
+                        Integer minPrice, Integer maxPrice) {
+        List<Integer> salePrices = new ArrayList<>();
+        List<Integer> finalPrices = new ArrayList<>();
+        variantRepository.findByProductProductId(product.getProductId()).stream()
+                .map(variant -> product.calcSalePrice(variant.getOriginalPrice()))
+                .filter(Objects::nonNull)
+                .forEach(salePrice -> {
+                    int discount = promotionService.findBestProductPromotion(product, salePrice, actives)
+                            .map(PromotionService.AppliedPromotion::discount)
+                            .orElse(0);
+                    int finalPrice = salePrice - discount;
+                    salePrices.add(salePrice);
+                    if (inPriceRange(finalPrice, minPrice, maxPrice)) {
+                        finalPrices.add(finalPrice);
+                    }
+                });
+        if (finalPrices.isEmpty()) {
+            return null;
+        }
         // Tồn kho quản lý theo biến thể–màu: cộng tất cả dòng color_stocks của sản phẩm
         int stock = colorStockRepository.findByVariantProductProductId(product.getProductId()).stream()
                 .mapToInt(ColorStock::getStock)
                 .sum();
-        return new Item(new ProductResponse(product), salePrice - discount, stock, score);
+        SalePriceRange range = new SalePriceRange(
+                salePrices.stream().min(Integer::compare).orElse(null),
+                salePrices.stream().max(Integer::compare).orElse(null));
+        return new Item(new ProductResponse(product, range),
+                finalPrices.stream().min(Integer::compare).orElseThrow(),
+                finalPrices.stream().max(Integer::compare).orElseThrow(),
+                stock, score);
     }
 
     private boolean inPriceRange(int price, Integer minPrice, Integer maxPrice) {

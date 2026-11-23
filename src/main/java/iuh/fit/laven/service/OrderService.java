@@ -579,9 +579,9 @@ public class OrderService {
             throw new AppException(HttpStatus.BAD_REQUEST, "Vượt quá số lượng tối đa cho phép mỗi đơn");
         }
 
-        int salePrice = product.getSalePrice();
+        int salePrice = colorStock.getVariant().getSalePrice(); // giá theo size
         Optional<PromotionService.AppliedPromotion> best =
-                promotionService.findBestProductPromotion(product, activePromotions);
+                promotionService.findBestProductPromotion(product, salePrice, activePromotions);
         Promotion productPromotion = best.map(PromotionService.AppliedPromotion::promotion).orElse(null);
         int productDiscount = best.map(PromotionService.AppliedPromotion::discount).orElse(0);
         int unitPrice = salePrice - productDiscount;

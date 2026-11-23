@@ -195,8 +195,8 @@ public class CartService {
                     .build();
         }
         Product product = stock.getVariant().getProduct();
-        int salePrice = product.getSalePrice();
-        int discount = promotionService.findBestProductPromotion(product, promotions)
+        int salePrice = stock.getVariant().getSalePrice(); // giá theo size
+        int discount = promotionService.findBestProductPromotion(product, salePrice, promotions)
                 .map(PromotionService.AppliedPromotion::discount).orElse(0);
         int unitPrice = salePrice - discount;
         int inStock = currentStock(stock);

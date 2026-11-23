@@ -248,9 +248,12 @@ public class PromotionService {
                 .toList();
     }
 
-    /** Mỗi sản phẩm chỉ lấy khuyến mãi giảm nhiều nhất, không cộng dồn. */
-    public Optional<AppliedPromotion> findBestProductPromotion(Product product, List<ScopedPromotion> actives) {
-        int salePrice = product.getSalePrice();
+    /**
+     * Mỗi sản phẩm chỉ lấy khuyến mãi giảm nhiều nhất, không cộng dồn.
+     * Phạm vi xét theo product (sản phẩm/thương hiệu/danh mục); số tiền giảm tính trên salePrice của size (Variant).
+     */
+    public Optional<AppliedPromotion> findBestProductPromotion(Product product, int salePrice,
+                                                               List<ScopedPromotion> actives) {
         AppliedPromotion best = null;
         for (ScopedPromotion sp : actives) {
             if (!appliesTo(sp, product)) {
@@ -264,8 +267,8 @@ public class PromotionService {
         return Optional.ofNullable(best);
     }
 
-    public Optional<AppliedPromotion> findBestProductPromotion(Product product) {
-        return findBestProductPromotion(product, loadActiveProductPromotions());
+    public Optional<AppliedPromotion> findBestProductPromotion(Product product, int salePrice) {
+        return findBestProductPromotion(product, salePrice, loadActiveProductPromotions());
     }
 
     /** Giảm trên MỘT sản phẩm. PERCENT có trần maxDiscountValue (> 0); FIXED_AMOUNT không vượt giá bán. */

@@ -1,8 +1,11 @@
 package iuh.fit.laven.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -43,4 +46,21 @@ public class Variant {
 
     @PositiveOrZero
     private Double height;
+
+    /** Giá nhập theo size. Chỉ nhận khi ghi (request body), không bao giờ trả ra JSON của entity. */
+    @NotNull(message = "Giá nhập không được rỗng")
+    @Min(value = 1001, message = "Giá nhập phải lớn hơn 1.000 đồng")
+    @Column(nullable = false)
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    private Integer originalPrice;
+
+    /**
+     * Giá bán = ceil((originalPrice + category.packagingCost) / 0,7) làm tròn lên nghìn.
+     * Cần product đã được nạp (đang trong transaction hoặc đã JOIN FETCH), vì Variant.product là LAZY.
+     */
+    @Transient
+    @JsonIgnore
+    public Integer getSalePrice() {
+        return product == null ? null : product.calcSalePrice(originalPrice);
+    }
 }

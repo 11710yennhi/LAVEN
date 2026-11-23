@@ -4,12 +4,16 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import iuh.fit.laven.dto.response.CategoryResponse;
 import iuh.fit.laven.dto.response.ProductResponse;
+import iuh.fit.laven.dto.response.SalePriceRange;
 import iuh.fit.laven.dto.response.StaffProductResponse;
+import iuh.fit.laven.dto.response.StaffVariantResponse;
+import iuh.fit.laven.dto.response.VariantResponse;
 import iuh.fit.laven.model.Category;
 import iuh.fit.laven.model.ColorStock;
 import iuh.fit.laven.model.id.ColorStockId;
 import iuh.fit.laven.model.Product;
 import iuh.fit.laven.model.ShipCost;
+import iuh.fit.laven.model.Variant;
 import iuh.fit.laven.repository.CategoryRepository;
 import iuh.fit.laven.repository.ColorStockRepository;
 import iuh.fit.laven.repository.ProductRepository;
@@ -34,15 +38,30 @@ class V2BusinessRulesTest {
         product.setProductId("PRO2026111910000001");
         product.setProductName("Balo A");
         product.setCategory(category);
-        product.setOriginalPrice(100_000);
         product.setMaxQuantityPerOrder(5);
 
-        JsonNode publicJson = mapper.valueToTree(new ProductResponse(product));
+        Variant variant = new Variant();
+        variant.setVariantId("VAR2026111910000001");
+        variant.setProduct(product);
+        variant.setSize("20 inch");
+        variant.setOriginalPrice(100_000);
+        // ceil((100.000 + 20.000) / 0,7) làm tròn lên nghìn = 172.000
+        assertEquals(172_000, variant.getSalePrice());
+
+        SalePriceRange range = new SalePriceRange(variant.getSalePrice(), variant.getSalePrice());
+        JsonNode publicJson = mapper.valueToTree(new ProductResponse(product, range));
         assertFalse(publicJson.has("originalPrice"));
         assertFalse(publicJson.has("packagingCost"));
-        assertEquals(product.getSalePrice(), publicJson.get("salePrice").intValue());
-        assertTrue(mapper.valueToTree(new StaffProductResponse(product)).has("originalPrice"));
+        assertEquals(172_000, publicJson.get("minSalePrice").intValue());
+        assertTrue(mapper.valueToTree(new StaffProductResponse(product, range)).has("packagingCost"));
         assertFalse(mapper.valueToTree(new CategoryResponse(category)).has("packagingCost"));
+
+        // Giá nhập theo size: khách không thấy, staff thấy; entity Variant không bao giờ trả giá nhập ra JSON
+        JsonNode publicVariant = mapper.valueToTree(new VariantResponse(variant));
+        assertFalse(publicVariant.has("originalPrice"));
+        assertEquals(172_000, publicVariant.get("salePrice").intValue());
+        assertTrue(mapper.valueToTree(new StaffVariantResponse(variant)).has("originalPrice"));
+        assertFalse(mapper.valueToTree(variant).has("originalPrice"));
 
     }
 
@@ -70,7 +89,6 @@ class V2BusinessRulesTest {
         ProductService service = new ProductService(products, categories, null, null);
         Product request = new Product();
         request.setCategory(category);
-        request.setOriginalPrice(100_000);
         request.setMaxQuantityPerOrder(5);
 
         assertTrue(service.create(request).getProductId().matches("PRO\\d{16}"));

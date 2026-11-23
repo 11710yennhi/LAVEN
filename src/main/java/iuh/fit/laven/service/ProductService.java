@@ -1,7 +1,9 @@
 package iuh.fit.laven.service;
 
+import iuh.fit.laven.dto.response.SalePriceRange;
 import iuh.fit.laven.model.Category;
 import iuh.fit.laven.model.Product;
+import iuh.fit.laven.model.Variant;
 import iuh.fit.laven.repository.CategoryRepository;
 import iuh.fit.laven.repository.ColorStockRepository;
 import iuh.fit.laven.repository.ProductRepository;
@@ -13,7 +15,12 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Collection;
+import java.util.IntSummaryStatistics;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -59,17 +66,59 @@ public class ProductService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Khoảng giá gốc không hợp lệ");
         }
 
-        return productRepository.search(
+        List<Product> products = productRepository.search(
                 blank(keyword), blank(productId), blank(productName),
                 blank(categoryId), blank(brand), blank(origin),
-                blank(material), minOriginalPrice, maxOriginalPrice,
-                status, includeInactive)
+                blank(material), status, includeInactive)
             .stream()
             .filter(product -> matchesSize(product, size))
             .filter(product -> matchesColor(product, colorId))
-            .filter(product -> minPrice == null || product.getSalePrice() >= minPrice)
-            .filter(product -> maxPrice == null || product.getSalePrice() <= maxPrice)
             .toList();
+        if (minPrice == null && maxPrice == null && minOriginalPrice == null && maxOriginalPrice == null) {
+            return products;
+        }
+
+        // Giá nằm ở biến thể: sản phẩm khớp nếu có ít nhất 1 size nằm trong cả 2 khoảng giá
+        Map<String, List<Variant>> variants = variantsByProduct(products);
+        return products.stream()
+            .filter(product -> variants.getOrDefault(product.getProductId(), List.of()).stream()
+                .anyMatch(variant -> inRange(product.calcSalePrice(variant.getOriginalPrice()), minPrice, maxPrice)
+                    && inRange(variant.getOriginalPrice(), minOriginalPrice, maxOriginalPrice)))
+            .toList();
+    }
+
+    /** Khoảng giá bán theo các size của từng sản phẩm (productId → min/max). */
+    @Transactional(readOnly = true)
+    public Map<String, SalePriceRange> findSalePriceRanges(Collection<Product> products) {
+        Map<String, List<Variant>> variants = variantsByProduct(products);
+        return products.stream().collect(Collectors.toMap(Product::getProductId, product -> {
+            IntSummaryStatistics stats = variants.getOrDefault(product.getProductId(), List.of()).stream()
+                .map(variant -> product.calcSalePrice(variant.getOriginalPrice()))
+                .filter(Objects::nonNull)
+                .mapToInt(Integer::intValue)
+                .summaryStatistics();
+            return stats.getCount() == 0
+                ? new SalePriceRange(null, null)
+                : new SalePriceRange(stats.getMin(), stats.getMax());
+        }, (a, b) -> a));
+    }
+
+    @Transactional(readOnly = true)
+    public SalePriceRange findSalePriceRange(Product product) {
+        return findSalePriceRanges(List.of(product)).get(product.getProductId());
+    }
+
+    private Map<String, List<Variant>> variantsByProduct(Collection<Product> products) {
+        if (products.isEmpty()) {
+            return Map.of();
+        }
+        return variantRepository.findByProductProductIdIn(products.stream().map(Product::getProductId).toList())
+            .stream()
+            .collect(Collectors.groupingBy(variant -> variant.getProduct().getProductId()));
+    }
+
+    private boolean inRange(Integer value, Integer min, Integer max) {
+        return value != null && (min == null || value >= min) && (max == null || value <= max);
     }
 
     @Transactional(readOnly = true)
@@ -102,7 +151,6 @@ public class ProductService {
         product.setBrand(request.getBrand());
         product.setOrigin(request.getOrigin());
         product.setMaterial(request.getMaterial());
-        product.setOriginalPrice(request.getOriginalPrice());
         product.setDescription(request.getDescription());
         product.setWaterResistance(request.getWaterResistance());
         product.setWheel(request.getWheel());
@@ -133,9 +181,6 @@ public class ProductService {
     }
 
     private void validate(Product product) {
-        if (product.getOriginalPrice() == null || product.getOriginalPrice() <= 1000) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Giá nhập phải lớn hơn 1.000 đồng");
-        }
         if (product.getMaxQuantityPerOrder() == null || product.getMaxQuantityPerOrder() < 1) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Số lượng tối đa phải lớn hơn 0");
         }

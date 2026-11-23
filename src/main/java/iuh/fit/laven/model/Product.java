@@ -41,11 +41,6 @@ public class Product {
     @Column(nullable = false, length = 150)
     private String material;
 
-    @NotNull
-    @Min(1001)
-    @Column(nullable = false)
-    private Integer originalPrice;
-
     @Column(length = 2000)
     private String description;
 
@@ -78,13 +73,16 @@ public class Product {
         return category.getCategoryName() + " " + brand + " " + productName;
     }
 
-    @Transient
-    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
-    public Integer getSalePrice() {
-        if (category == null || originalPrice == null || category.getPackagingCost() == null) {
+    /**
+     * Giá bán của 1 biến thể = ceil((giá nhập biến thể + phí đóng gói danh mục) / 0,7) làm tròn lên nghìn.
+     * Đặt ở Product vì phí đóng gói lấy từ danh mục của sản phẩm; Variant.getSalePrice() gọi lại hàm này.
+     * Nơi không có transaction (AI) gọi trực tiếp hàm này để không phải mở Variant.product (LAZY).
+     */
+    public Integer calcSalePrice(Integer variantOriginalPrice) {
+        if (category == null || variantOriginalPrice == null || category.getPackagingCost() == null) {
             return null;
         }
-        long rawPrice = (long) originalPrice + category.getPackagingCost();
+        long rawPrice = (long) variantOriginalPrice + category.getPackagingCost();
         return Math.toIntExact(Math.ceilDiv(rawPrice, 700L) * 1_000L);
     }
 }

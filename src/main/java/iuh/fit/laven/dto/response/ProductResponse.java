@@ -14,7 +14,9 @@ public class ProductResponse {
     private final String brand;
     private final String origin;
     private final String material;
-    private final Integer salePrice;
+    /** Giá bán thấp nhất / cao nhất trong các size (null nếu sản phẩm chưa có biến thể). */
+    private final Integer minSalePrice;
+    private final Integer maxSalePrice;
     private final String description;
     private final String waterResistance;
     private final String wheel;
@@ -24,11 +26,11 @@ public class ProductResponse {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private final String imageUrl;
 
-    public ProductResponse(Product product) {
-        this(product, null);
+    public ProductResponse(Product product, SalePriceRange priceRange) {
+        this(product, priceRange, null);
     }
 
-    public ProductResponse(Product product, String imageUrl) {
+    public ProductResponse(Product product, SalePriceRange priceRange, String imageUrl) {
         this.productId = product.getProductId();
         this.productName = product.getProductName();
         this.categoryId = product.getCategory().getCategoryId();
@@ -36,7 +38,8 @@ public class ProductResponse {
         this.brand = product.getBrand();
         this.origin = product.getOrigin();
         this.material = product.getMaterial();
-        this.salePrice = product.getSalePrice();
+        this.minSalePrice = priceRange == null ? null : priceRange.min();
+        this.maxSalePrice = priceRange == null ? null : priceRange.max();
         this.description = product.getDescription();
         this.waterResistance = product.getWaterResistance();
         this.wheel = product.getWheel();

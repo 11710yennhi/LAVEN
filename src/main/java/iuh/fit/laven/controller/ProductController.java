@@ -42,8 +42,10 @@ public class ProductController {
             null, null, null, false
         );
         var coverUrls = productImageService.findCoverUrls(products.stream().map(Product::getProductId).toList());
+        var priceRanges = productService.findSalePriceRanges(products);
         return products.stream()
-            .map(product -> new ProductResponse(product, coverUrls.get(product.getProductId())))
+            .map(product -> new ProductResponse(product, priceRanges.get(product.getProductId()),
+                coverUrls.get(product.getProductId())))
             .toList();
     }
 
@@ -64,26 +66,32 @@ public class ProductController {
         @RequestParam(required = false) Integer maxOriginalPrice,
         @RequestParam(required = false) Boolean status
     ) {
-        return productService.search(
+        // minOriginalPrice/maxOriginalPrice: lọc theo giá nhập của biến thể (có ít nhất 1 size nằm trong khoảng)
+        List<Product> products = productService.search(
             keyword, productId, productName, categoryId, brand, origin,
             material, size, colorId, minPrice, maxPrice,
             minOriginalPrice, maxOriginalPrice, status, true
-        ).stream().map(StaffProductResponse::new).toList();
+        );
+        var priceRanges = productService.findSalePriceRanges(products);
+        return products.stream()
+            .map(product -> new StaffProductResponse(product, priceRanges.get(product.getProductId())))
+            .toList();
     }
 
     @GetMapping("/public/products/{productId}")
     public ProductResponse getPublicProduct(@PathVariable String productId) {
-        return new ProductResponse(productService.findById(productId, false));
+        Product product = productService.findById(productId, false);
+        return new ProductResponse(product, productService.findSalePriceRange(product));
     }
 
     @GetMapping("/staff/products/{productId}")
     public StaffProductResponse getProduct(@PathVariable String productId) {
-        return new StaffProductResponse(productService.findById(productId, true));
+        return toStaffResponse(productService.findById(productId, true));
     }
 
     @PostMapping("/staff/products")
     public StaffProductResponse createProduct(@Valid @RequestBody Product product) {
-        return new StaffProductResponse(productService.create(product));
+        return toStaffResponse(productService.create(product));
     }
 
     @PutMapping("/staff/products/{productId}")
@@ -91,7 +99,7 @@ public class ProductController {
         @PathVariable String productId,
         @Valid @RequestBody Product product
     ) {
-        return new StaffProductResponse(productService.update(productId, product));
+        return toStaffResponse(productService.update(productId, product));
     }
 
     @DeleteMapping("/staff/products/{productId}")
@@ -99,6 +107,10 @@ public class ProductController {
         @PathVariable String productId,
         @RequestParam(required = false) String reason
     ) {
-        return new StaffProductResponse(productService.deactivate(productId, reason));
+        return toStaffResponse(productService.deactivate(productId, reason));
+    }
+
+    private StaffProductResponse toStaffResponse(Product product) {
+        return new StaffProductResponse(product, productService.findSalePriceRange(product));
     }
 }
