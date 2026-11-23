@@ -6,9 +6,9 @@ import iuh.fit.laven.dto.response.CartResponse;
 import iuh.fit.laven.exception.AppException;
 import iuh.fit.laven.model.Cart;
 import iuh.fit.laven.model.CartItem;
-import iuh.fit.laven.model.CartItemId;
+import iuh.fit.laven.model.id.CartItemId;
 import iuh.fit.laven.model.ColorStock;
-import iuh.fit.laven.model.ColorStockId;
+import iuh.fit.laven.model.id.ColorStockId;
 import iuh.fit.laven.model.Product;
 import iuh.fit.laven.model.User;
 import iuh.fit.laven.repository.CartItemRepository;
@@ -195,8 +195,8 @@ public class CartService {
                     .build();
         }
         Product product = stock.getVariant().getProduct();
-        int salePrice = product.getSalePrice();
-        int discount = promotionService.findBestProductPromotion(product, promotions)
+        int salePrice = stock.getVariant().getSalePrice(); // giá theo size
+        int discount = promotionService.findBestProductPromotion(product, salePrice, promotions)
                 .map(PromotionService.AppliedPromotion::discount).orElse(0);
         int unitPrice = salePrice - discount;
         int inStock = currentStock(stock);

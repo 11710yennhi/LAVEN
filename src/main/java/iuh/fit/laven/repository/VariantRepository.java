@@ -1,15 +1,24 @@
 package iuh.fit.laven.repository;
 
 import iuh.fit.laven.model.Variant;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 public interface VariantRepository extends JpaRepository<Variant, String> {
+    // Nạp sẵn product (category EAGER) để tính salePrice được cả ngoài transaction
+    @EntityGraph(attributePaths = "product")
     List<Variant> findByProductProductId(String productId);
+
+    @EntityGraph(attributePaths = "product")
+    List<Variant> findByProductProductIdIn(Collection<String> productIds);
+
+    @EntityGraph(attributePaths = "product")
 
     @Query("""
         SELECT v FROM Variant v
@@ -51,5 +60,6 @@ public interface VariantRepository extends JpaRepository<Variant, String> {
         @Param("maxHeight") Double maxHeight
     );
 
+    @EntityGraph(attributePaths = "product")
     Optional<Variant> findByVariantId(String variantId);
 }

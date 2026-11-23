@@ -1,6 +1,14 @@
 # LAVEN
 Bài tập lớn môn WWW
 
+## API theo nghiệp vụ v2
+
+- `GET /api/public/products` và `GET /api/public/products/{productId}` trả DTO công khai, không có `originalPrice` (giá nhập) hay `packagingCost`. Bộ lọc giá nhập chỉ có ở API staff.
+- `GET /api/public/categories` không trả phí đóng gói.
+- Khi thêm tỉnh/thành, staff nhập `shipCostId` theo `PROVINCE_ID` của Viettel Post. API sửa chỉ đổi `priceShip`, giữ nguyên mã và tên tỉnh để đơn cũ tra cứu theo `receiverCity`.
+- Sản phẩm mới có mã bắt đầu bằng `PRO`. Mã `PRD` đã có trong database không bị đổi tự động.
+- `POST /api/staff/stocks/{variantId}/{colorId}?quantity=0` tạo dòng tồn kho ban đầu một lần. Nhập thêm hàng gọi `POST /api/staff/stocks/{variantId}/{colorId}/adjustment?delta=10`. Không còn API ghi đè số tồn đã có.
+
 ## Ảnh sản phẩm: Trình duyệt tải thẳng lên Cloudinary (Direct Upload)
 
 Ảnh không đi qua server LAVEN nhằm tối ưu tài nguyên máy chủ. MariaDB chỉ lưu URL trong `product_images.imageUrl`.

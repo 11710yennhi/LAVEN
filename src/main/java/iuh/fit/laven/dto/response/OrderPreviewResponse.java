@@ -38,7 +38,6 @@ public class OrderPreviewResponse {
         private String size;
         private String colorName;
         private Integer quantity;
-        private Integer originalPrice;
         private Integer salePrice;
         private Integer productDiscount;
         private Integer unitPrice;

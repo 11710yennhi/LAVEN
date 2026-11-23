@@ -1,4 +1,4 @@
-package iuh.fit.laven.model;
+package iuh.fit.laven.model.id;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;

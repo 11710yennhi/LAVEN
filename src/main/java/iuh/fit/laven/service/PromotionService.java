@@ -94,6 +94,10 @@ public class PromotionService {
         if (p.getCustomer() != null || TEMPLATE_CODE.equals(p.getCode())) {
             throw new AppException(HttpStatus.FORBIDDEN, "Chỉ Admin được sửa mã bồi thường và mã mẫu");
         }
+        if (request.getApplyType() != null && request.getApplyType() != p.getApplyType()) {
+            throw new AppException(HttpStatus.CONFLICT,
+                    "Không được đổi loại áp dụng của khuyến mãi đã tạo, vui lòng tạo khuyến mãi mới");
+        }
         applyRequest(p, request, false);
         promotionRepository.save(p);
         saveScope(p, request);
@@ -161,6 +165,9 @@ public class PromotionService {
         }
         if (max > 100) {
             throw bad("Giá trị giảm tối đa của mã mẫu là phần trăm, không được vượt quá 100");
+        }
+        if (request.getDiscountType() == DiscountType.PERCENT && max == 0) {
+            throw bad("Mã mẫu giảm theo phần trăm phải có mức giảm tối đa lớn hơn 0");
         }
         t.setDiscountType(request.getDiscountType());
         t.setDiscountValue(value);
@@ -241,9 +248,12 @@ public class PromotionService {
                 .toList();
     }
 
-    /** Mỗi sản phẩm chỉ lấy khuyến mãi giảm nhiều nhất, không cộng dồn. */
-    public Optional<AppliedPromotion> findBestProductPromotion(Product product, List<ScopedPromotion> actives) {
-        int salePrice = product.getSalePrice();
+    /**
+     * Mỗi sản phẩm chỉ lấy khuyến mãi giảm nhiều nhất, không cộng dồn.
+     * Phạm vi xét theo product (sản phẩm/thương hiệu/danh mục); số tiền giảm tính trên salePrice của size (Variant).
+     */
+    public Optional<AppliedPromotion> findBestProductPromotion(Product product, int salePrice,
+                                                               List<ScopedPromotion> actives) {
         AppliedPromotion best = null;
         for (ScopedPromotion sp : actives) {
             if (!appliesTo(sp, product)) {
@@ -257,8 +267,8 @@ public class PromotionService {
         return Optional.ofNullable(best);
     }
 
-    public Optional<AppliedPromotion> findBestProductPromotion(Product product) {
-        return findBestProductPromotion(product, loadActiveProductPromotions());
+    public Optional<AppliedPromotion> findBestProductPromotion(Product product, int salePrice) {
+        return findBestProductPromotion(product, salePrice, loadActiveProductPromotions());
     }
 
     /** Giảm trên MỘT sản phẩm. PERCENT có trần maxDiscountValue (> 0); FIXED_AMOUNT không vượt giá bán. */

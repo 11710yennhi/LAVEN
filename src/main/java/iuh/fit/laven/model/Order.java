@@ -151,13 +151,4 @@ public class Order {
     @OneToOne(mappedBy = "order", fetch = FetchType.LAZY)
     private ReturnRecord returnRecord;
 
-    public void applyAmounts(int productTotal, int shippingFee, int orderDiscount, int shippingDiscount) {
-        setProductTotal(productTotal);
-        setShippingFee(shippingFee);
-        setOrderDiscount(orderDiscount);
-        setShippingDiscount(shippingDiscount);
-        setDiscountAmount(orderDiscount + shippingDiscount);
-        setTotalAmount(productTotal + shippingFee - (orderDiscount + shippingDiscount));
-    }
-
 }

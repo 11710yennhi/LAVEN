@@ -1,7 +1,7 @@
 package iuh.fit.laven.repository;
 
 import iuh.fit.laven.model.CartItem;
-import iuh.fit.laven.model.CartItemId;
+import iuh.fit.laven.model.id.CartItemId;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;

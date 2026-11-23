@@ -1,7 +1,7 @@
 package iuh.fit.laven.repository;
 
 import iuh.fit.laven.model.OrderDetail;
-import iuh.fit.laven.model.OrderDetailId;
+import iuh.fit.laven.model.id.OrderDetailId;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

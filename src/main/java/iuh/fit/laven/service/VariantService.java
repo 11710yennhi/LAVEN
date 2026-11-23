@@ -56,14 +56,17 @@ public class VariantService {
     }
 
     public Variant create(String productId, Variant variant) {
+        validatePrice(variant.getOriginalPrice());
         variant.setProduct(requireProduct(productId, false));
         variant.setVariantId(nextVariantId());
         return variantRepository.save(variant);
     }
 
     public Variant update(String id, Variant request) {
-        Variant variant = variantRepository.findById(id)
+        Variant variant = variantRepository.findByVariantId(id) // nạp kèm product để tính salePrice
             .orElseThrow(() -> notFound("Biến thể"));
+        validatePrice(request.getOriginalPrice());
+        variant.setOriginalPrice(request.getOriginalPrice());
         variant.setSize(request.getSize());
         variant.setWeight(request.getWeight());
         variant.setCapacity(request.getCapacity());
@@ -71,6 +74,13 @@ public class VariantService {
         variant.setWidth(request.getWidth());
         variant.setHeight(request.getHeight());
         return variantRepository.save(variant);
+    }
+
+    /** Giá nhập theo size, phải lớn hơn 1.000 đồng (giống ràng buộc cũ của Product). */
+    private void validatePrice(Integer originalPrice) {
+        if (originalPrice == null || originalPrice <= 1000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Giá nhập phải lớn hơn 1.000 đồng");
+        }
     }
 
     private void validateRange(Double min, Double max, String fieldName) {

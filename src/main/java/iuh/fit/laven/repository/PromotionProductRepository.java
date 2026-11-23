@@ -1,7 +1,7 @@
 package iuh.fit.laven.repository;
 
 import iuh.fit.laven.model.PromotionProduct;
-import iuh.fit.laven.model.PromotionProductId;
+import iuh.fit.laven.model.id.PromotionProductId;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

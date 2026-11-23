@@ -1,6 +1,7 @@
 package iuh.fit.laven.model;
 
 import iuh.fit.laven.model.enums.PromotionApplyType;
+import iuh.fit.laven.model.id.PromotionBrandId;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;

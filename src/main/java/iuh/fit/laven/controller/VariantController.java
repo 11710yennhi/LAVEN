@@ -1,5 +1,8 @@
 package iuh.fit.laven.controller;
 
+import org.springframework.http.MediaType;
+import iuh.fit.laven.dto.response.StaffVariantResponse;
+import iuh.fit.laven.dto.response.VariantResponse;
 import iuh.fit.laven.model.Variant;
 import iuh.fit.laven.service.VariantService;
 import jakarta.validation.Valid;
@@ -8,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping(value = "/api", produces = MediaType.APPLICATION_JSON_VALUE)
 public class VariantController {
     private final VariantService variantService;
 
@@ -17,7 +20,7 @@ public class VariantController {
     }
 
     @GetMapping("/public/variants")
-    public List<Variant> searchPublicVariants(
+    public List<VariantResponse> searchPublicVariants(
         @RequestParam(required = false) String productId,
         @RequestParam(required = false) String productName,
         @RequestParam(required = false) String keyword,
@@ -38,11 +41,11 @@ public class VariantController {
             productId, productName, keyword, variantId, size,
             minWeight, maxWeight, minCapacity, maxCapacity,
             minLength, maxLength, minWidth, maxWidth, minHeight, maxHeight
-        );
+        ).stream().map(VariantResponse::new).toList();
     }
 
     @GetMapping("/staff/variants")
-    public List<Variant> searchVariants(
+    public List<StaffVariantResponse> searchVariants(
         @RequestParam(required = false) String productId,
         @RequestParam(required = false) String productName,
         @RequestParam(required = false) String keyword,
@@ -63,32 +66,32 @@ public class VariantController {
             productId, productName, keyword, variantId, size,
             minWeight, maxWeight, minCapacity, maxCapacity,
             minLength, maxLength, minWidth, maxWidth, minHeight, maxHeight
-        );
+        ).stream().map(StaffVariantResponse::new).toList();
     }
 
     @GetMapping("/public/products/{productId}/variants")
-    public List<Variant> getPublicVariants(@PathVariable String productId) {
-        return variantService.findByProduct(productId, false);
+    public List<VariantResponse> getPublicVariants(@PathVariable String productId) {
+        return variantService.findByProduct(productId, false).stream().map(VariantResponse::new).toList();
     }
 
     @GetMapping("/staff/products/{productId}/variants")
-    public List<Variant> getVariants(@PathVariable String productId) {
-        return variantService.findByProduct(productId, true);
+    public List<StaffVariantResponse> getVariants(@PathVariable String productId) {
+        return variantService.findByProduct(productId, true).stream().map(StaffVariantResponse::new).toList();
     }
 
     @PostMapping("/staff/products/{productId}/variants")
-    public Variant addVariant(
+    public StaffVariantResponse addVariant(
         @PathVariable String productId,
         @Valid @RequestBody Variant variant
     ) {
-        return variantService.create(productId, variant);
+        return new StaffVariantResponse(variantService.create(productId, variant));
     }
 
     @PutMapping("/staff/variants/{variantId}")
-    public Variant updateVariant(
+    public StaffVariantResponse updateVariant(
         @PathVariable String variantId,
         @Valid @RequestBody Variant variant
     ) {
-        return variantService.update(variantId, variant);
+        return new StaffVariantResponse(variantService.update(variantId, variant));
     }
 }

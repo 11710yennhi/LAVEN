@@ -24,8 +24,6 @@ public interface ProductRepository extends JpaRepository<Product, String> {
           AND (:brand IS NULL OR LOWER(p.brand) LIKE LOWER(CONCAT('%', :brand, '%')))
           AND (:origin IS NULL OR LOWER(p.origin) LIKE LOWER(CONCAT('%', :origin, '%')))
           AND (:material IS NULL OR LOWER(p.material) LIKE LOWER(CONCAT('%', :material, '%')))
-          AND (:minOriginalPrice IS NULL OR p.originalPrice >= :minOriginalPrice)
-          AND (:maxOriginalPrice IS NULL OR p.originalPrice <= :maxOriginalPrice)
           AND (:status IS NULL OR p.status = :status)
         ORDER BY p.productId DESC
         """)
@@ -37,8 +35,6 @@ public interface ProductRepository extends JpaRepository<Product, String> {
         @Param("brand") String brand,
         @Param("origin") String origin,
         @Param("material") String material,
-        @Param("minOriginalPrice") Integer minOriginalPrice,
-        @Param("maxOriginalPrice") Integer maxOriginalPrice,
         @Param("status") Boolean status,
         @Param("includeInactive") boolean includeInactive
     );

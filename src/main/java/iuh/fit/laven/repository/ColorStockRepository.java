@@ -1,7 +1,7 @@
 package iuh.fit.laven.repository;
 
 import iuh.fit.laven.model.ColorStock;
-import iuh.fit.laven.model.ColorStockId;
+import iuh.fit.laven.model.id.ColorStockId;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -43,7 +43,6 @@ public interface ColorStockRepository extends JpaRepository<ColorStock, ColorSto
         @Param("maxStock") Integer maxStock,
         @Param("includeInactive") boolean includeInactive
     );
-
     Optional<ColorStock> findByVariant_VariantIdAndColor_ColorId(String variantVariantId, String colorColorId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

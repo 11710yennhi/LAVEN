@@ -11,7 +11,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
-
+import org.springframework.validation.BindException;
+import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 
 @Slf4j
@@ -53,9 +54,23 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleMethodNotAllowed(HttpRequestMethodNotSupportedException ex) {
         return build(HttpStatus.METHOD_NOT_ALLOWED, "Phương thức không được hỗ trợ cho đường dẫn này");
     }
+    // Service của TV1 ném ResponseStatusException: giữ đúng mã và câu thông báo TV1 đã đặt
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ErrorResponse> handleResponseStatus(ResponseStatusException ex) {
+        HttpStatus status = HttpStatus.valueOf(ex.getStatusCode().value());
+        return build(status, ex.getReason() != null ? ex.getReason() : status.getReasonPhrase());
+    }
 
+    // @Valid trên DTO sai dữ liệu (MethodArgumentNotValidException là lớp con của BindException)
+    @ExceptionHandler(BindException.class)
+    public ResponseEntity<ErrorResponse> handleBind(BindException ex) {
+        String message = ex.getFieldErrors().isEmpty() ? "Dữ liệu gửi lên không hợp lệ"
+                : ex.getFieldErrors().get(0).getDefaultMessage();
+        return build(HttpStatus.BAD_REQUEST, message);
+    }
     // Lỗi không lường trước: ghi log, không lộ chi tiết cho client
     @ExceptionHandler(Exception.class)
+
     public ResponseEntity<ErrorResponse> handleOther(Exception ex) {
         log.error("Lỗi không xác định", ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "Lỗi hệ thống, vui lòng thử lại sau");

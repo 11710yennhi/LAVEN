@@ -11,8 +11,6 @@ import java.util.Optional;
 public interface ShipCostRepository extends JpaRepository<ShipCost, Integer> {
     Optional<ShipCost> findByCityIgnoreCase(String city);
 
-    boolean existsByCityIgnoreCaseAndShipCostIdNot(String city, Integer shipCostId);
-
     @Query("""
         SELECT s FROM ShipCost s
         WHERE (:city IS NULL OR LOWER(s.city) LIKE LOWER(CONCAT('%', :city, '%')))

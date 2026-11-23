@@ -1,6 +1,7 @@
 package iuh.fit.laven.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import iuh.fit.laven.model.id.ColorStockId;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
