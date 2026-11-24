@@ -62,4 +62,14 @@ public interface VariantRepository extends JpaRepository<Variant, String> {
 
     @EntityGraph(attributePaths = "product.category")
     Optional<Variant> findByVariantId(String variantId);
+
+    /** Chatbot: biến thể của sản phẩm đang bán, có đủ số đo để so với quy định hành lý. */
+    @EntityGraph(attributePaths = "product.category")
+    @Query("""
+        SELECT v FROM Variant v
+        WHERE v.product.status = true AND v.product.category.status = true
+          AND v.length IS NOT NULL AND v.width IS NOT NULL
+          AND v.height IS NOT NULL AND v.weight IS NOT NULL
+        """)
+    List<Variant> findForTrip();
 }

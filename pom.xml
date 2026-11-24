@@ -129,6 +129,12 @@
             <artifactId>spring-ai-starter-model-google-genai-embedding</artifactId>
         </dependency>
 
+        <!-- Spring AI: Gemini chat cho chatbot tư vấn (dùng chung GEMINI_API_KEY) -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-google-genai</artifactId>
+        </dependency>
+
         <!-- Spring AI: lưu và tìm vector trong MariaDB (kiểu VECTOR) -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
