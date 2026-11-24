@@ -69,4 +69,5 @@ public interface ColorStockRepository extends JpaRepository<ColorStock, ColorSto
             @Param("variantId") String variantId,
             @Param("colorId") String colorId
     );
+    boolean existsByImageUrl(String imageUrl);
 }

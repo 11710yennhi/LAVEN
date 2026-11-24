@@ -35,4 +35,5 @@ public interface CategoryRepository extends JpaRepository<Category, String> {
         @Param("status") Boolean status,
         @Param("includeInactive") boolean includeInactive
     );
+    boolean existsByImageUrl(String imageUrl);
 }

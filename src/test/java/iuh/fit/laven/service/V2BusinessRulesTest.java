@@ -99,7 +99,7 @@ class V2BusinessRulesTest {
         ColorStockRepository repository = mock(ColorStockRepository.class);
         ColorStockId id = new ColorStockId("VAR001", "#000000");
         when(repository.existsById(id)).thenReturn(true);
-        ColorStockService service = new ColorStockService(repository, null, null, null);
+        ColorStockService service = new ColorStockService(repository, null, null, null, null);
 
         ResponseStatusException error = assertThrows(ResponseStatusException.class,
             () -> service.createStock("VAR001", "#000000", 99));

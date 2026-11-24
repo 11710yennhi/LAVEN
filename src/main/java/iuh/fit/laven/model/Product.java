@@ -62,6 +62,10 @@ public class Product {
     @Column(length = 500)
     private String stopSellingReason;
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Column(length = 30)
+    private String coverImageId;
+
     @NotNull
     @Min(1)
     @Column(nullable = false)

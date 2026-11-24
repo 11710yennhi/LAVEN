@@ -112,8 +112,9 @@ public class ProductController {
             minOriginalPrice, maxOriginalPrice, status, true
         );
         var priceRanges = productService.findSalePriceRanges(products);
+        var covers = productImageService.findCoverUrls(products.stream().map(Product::getProductId).toList());
         return products.stream()
-            .map(product -> new StaffProductResponse(product, priceRanges.get(product.getProductId())))
+            .map(product -> new StaffProductResponse(product, priceRanges.get(product.getProductId()), covers.get(product.getProductId())))
             .toList();
     }
 
@@ -153,6 +154,7 @@ public class ProductController {
     }
 
     private StaffProductResponse toStaffResponse(Product product) {
-        return new StaffProductResponse(product, productService.findSalePriceRange(product));
+        var covers = productImageService.findCoverUrls(List.of(product.getProductId()));
+        return new StaffProductResponse(product, productService.findSalePriceRange(product), covers.get(product.getProductId()));
     }
 }

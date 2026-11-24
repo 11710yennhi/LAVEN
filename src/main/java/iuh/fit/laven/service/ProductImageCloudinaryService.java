@@ -97,20 +97,28 @@ public class ProductImageCloudinaryService {
      * Xóa ảnh trực tiếp trên Cloudinary bằng URL.
      */
     public void deleteByUrl(String imageUrl) {
-        if (imageUrl == null || imageUrl.isBlank()) {
+        if (imageUrl == null || imageUrl.isBlank() || cloudName.isBlank()) {
             return;
         }
         try {
-            String publicId = extractPublicId(imageUrl);
+            URI uri = URI.create(imageUrl);
+            if (!"https".equalsIgnoreCase(uri.getScheme())
+                || !"res.cloudinary.com".equalsIgnoreCase(uri.getHost())
+                || uri.getPath() == null || !uri.getPath().startsWith("/" + cloudName + "/image/upload/")) {
+                return;
+            }
+            String publicId = extractPublicId(uri.getPath());
             if (publicId != null && !publicId.isBlank()) {
-                Cloudinary cloudinary = getCloudinary();
-                cloudinary.uploader().destroy(publicId, ObjectUtils.emptyMap());
+                requireConfiguration();
+                Map<?, ?> result = getCloudinary().uploader().destroy(publicId, ObjectUtils.asMap("invalidate", true));
+                if (!"ok".equals(result.get("result")) && !"not found".equals(result.get("result"))) {
+                    throw new IllegalStateException("Cloudinary không xác nhận xóa ảnh");
+                }
             }
         } catch (Exception ex) {
-            // Không làm gián đoạn luồng nếu xóa ảnh trên Cloudinary gặp sự cố mạng
+            throw new IllegalStateException("Không xóa được ảnh sản phẩm trên Cloudinary", ex);
         }
     }
-
     /**
      * Bóc tách public_id từ URL ảnh Cloudinary.
      */

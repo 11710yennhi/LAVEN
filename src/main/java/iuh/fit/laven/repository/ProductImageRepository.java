@@ -17,7 +17,10 @@ public interface ProductImageRepository extends JpaRepository<ProductImage, Stri
         SELECT img.product.productId AS productId, img.imageUrl AS imageUrl
         FROM ProductImage img
         WHERE img.productImageId IN (
-            SELECT MIN(candidate.productImageId)
+            SELECT COALESCE(
+                MAX(CASE WHEN candidate.productImageId = candidate.product.coverImageId THEN candidate.productImageId ELSE NULL END),
+                MIN(candidate.productImageId)
+            )
             FROM ProductImage candidate
             WHERE candidate.product.productId IN :productIds
             GROUP BY candidate.product.productId
@@ -42,4 +45,5 @@ public interface ProductImageRepository extends JpaRepository<ProductImage, Stri
         @Param("productName") String productName,
         @Param("productImageId") String productImageId
     );
+    boolean existsByImageUrl(String imageUrl);
 }
