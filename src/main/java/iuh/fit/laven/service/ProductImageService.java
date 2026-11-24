@@ -56,15 +56,15 @@ public class ProductImageService {
      * 1. Lấy chữ ký số để React gửi file thẳng lên Cloudinary
      */
     public ProductImageUploadSignatureResponse getUploadSignature(String productId) {
-        requireProduct(productId, false);
-        return cloudinaryService.signUpload(productId);
+        Product product = requireProduct(productId, true);
+        return cloudinaryService.signUpload(productId, product.getCategory().getCategoryName());
     }
 
     /**
      * 2. Thêm ảnh mới (Add): Nhận URL từ React sau khi tải lên Cloudinary
      */
     public ProductImage addImage(String productId, String imageUrl) {
-        Product product = requireProduct(productId, false);
+        Product product = requireProduct(productId, true);
         String validUrl = cloudinaryService.validateImageUrl(imageUrl, productId);
 
         ProductImage image = new ProductImage();

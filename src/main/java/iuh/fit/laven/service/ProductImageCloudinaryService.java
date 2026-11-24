@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.net.URI;
+import java.text.Normalizer;
+import java.util.Locale;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
@@ -38,7 +40,7 @@ public class ProductImageCloudinaryService {
     /**
      * Tạo chữ ký số để React gửi file thẳng lên Cloudinary.
      */
-    public ProductImageUploadSignatureResponse signUpload(String productId) {
+    public ProductImageUploadSignatureResponse signUpload(String productId, String categoryName) {
         requireConfiguration();
         long timestamp = Instant.now().getEpochSecond();
         String publicId = "laven/products/" + productId + "/" + UUID.randomUUID();
@@ -46,12 +48,16 @@ public class ProductImageCloudinaryService {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("timestamp", timestamp);
         parameters.put("public_id", publicId);
+        String assetFolder = categoryFolder(categoryName);
+        if (assetFolder != null) {
+            parameters.put("asset_folder", assetFolder);
+        }
 
         Cloudinary cloudinary = getCloudinary();
         cloudinary.signRequest(parameters, Map.of());
 
         return new ProductImageUploadSignatureResponse(
-            cloudName, apiKey, timestamp, publicId, (String) parameters.get("signature")
+            cloudName, apiKey, timestamp, publicId, (String) parameters.get("signature"), assetFolder
         );
     }
 
@@ -131,6 +137,18 @@ public class ProductImageCloudinaryService {
         } catch (Exception ex) {
             return null;
         }
+    }
+
+    private String categoryFolder(String categoryName) {
+        if (categoryName == null) {
+            return null;
+        }
+        String name = Normalizer.normalize(categoryName, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "").strip().toLowerCase(Locale.ROOT);
+        if (name.matches("va\\s*li(?:\\b.*)?")) return "vali";
+        if (name.matches("ba\\s*lo(?:\\b.*)?")) return "balo";
+        if (name.matches("tui\\s*xach(?:\\b.*)?")) return "tuixach";
+        return null;
     }
 
     private Cloudinary getCloudinary() {

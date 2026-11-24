@@ -14,8 +14,10 @@ import java.util.List;
 @RequestMapping(value = "/api", produces = MediaType.APPLICATION_JSON_VALUE)
 public class VariantController {
     private final VariantService variantService;
+    private final iuh.fit.laven.service.PromotionService promotions;
 
-    public VariantController(VariantService variantService) {
+    public VariantController(VariantService variantService, iuh.fit.laven.service.PromotionService promotions) {
+        this.promotions = promotions;
         this.variantService = variantService;
     }
 
@@ -71,7 +73,9 @@ public class VariantController {
 
     @GetMapping("/public/products/{productId}/variants")
     public List<VariantResponse> getPublicVariants(@PathVariable String productId) {
-        return variantService.findByProduct(productId, false).stream().map(VariantResponse::new).toList();
+        var actives = promotions.loadActiveProductPromotions();
+        return variantService.findByProduct(productId, false).stream().map(variant ->
+            new VariantResponse(variant, promotions.finalProductPrice(variant.getProduct(), variant.getSalePrice(), actives))).toList();
     }
 
     @GetMapping("/staff/products/{productId}/variants")
@@ -84,7 +88,7 @@ public class VariantController {
         @PathVariable String productId,
         @Valid @RequestBody Variant variant
     ) {
-        return new StaffVariantResponse(variantService.create(productId, variant));
+        return variantService.create(productId, variant);
     }
 
     @PutMapping("/staff/variants/{variantId}")
@@ -92,6 +96,6 @@ public class VariantController {
         @PathVariable String variantId,
         @Valid @RequestBody Variant variant
     ) {
-        return new StaffVariantResponse(variantService.update(variantId, variant));
+        return variantService.update(variantId, variant);
     }
 }

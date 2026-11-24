@@ -82,7 +82,7 @@ public class ProductService {
         Map<String, List<Variant>> variants = variantsByProduct(products);
         return products.stream()
             .filter(product -> variants.getOrDefault(product.getProductId(), List.of()).stream()
-                .anyMatch(variant -> inRange(product.calcSalePrice(variant.getOriginalPrice()), minPrice, maxPrice)
+                .anyMatch(variant -> inRange(variant.getSalePrice(), minPrice, maxPrice)
                     && inRange(variant.getOriginalPrice(), minOriginalPrice, maxOriginalPrice)))
             .toList();
     }
@@ -93,7 +93,7 @@ public class ProductService {
         Map<String, List<Variant>> variants = variantsByProduct(products);
         return products.stream().collect(Collectors.toMap(Product::getProductId, product -> {
             IntSummaryStatistics stats = variants.getOrDefault(product.getProductId(), List.of()).stream()
-                .map(variant -> product.calcSalePrice(variant.getOriginalPrice()))
+                .map(Variant::getSalePrice)
                 .filter(Objects::nonNull)
                 .mapToInt(Integer::intValue)
                 .summaryStatistics();

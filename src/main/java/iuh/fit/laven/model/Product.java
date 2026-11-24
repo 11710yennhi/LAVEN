@@ -73,16 +73,4 @@ public class Product {
         return category.getCategoryName() + " " + brand + " " + productName;
     }
 
-    /**
-     * Giá bán của 1 biến thể = ceil((giá nhập biến thể + phí đóng gói danh mục) / 0,7) làm tròn lên nghìn.
-     * Đặt ở Product vì phí đóng gói lấy từ danh mục của sản phẩm; Variant.getSalePrice() gọi lại hàm này.
-     * Nơi không có transaction (AI) gọi trực tiếp hàm này để không phải mở Variant.product (LAZY).
-     */
-    public Integer calcSalePrice(Integer variantOriginalPrice) {
-        if (category == null || variantOriginalPrice == null || category.getPackagingCost() == null) {
-            return null;
-        }
-        long rawPrice = (long) variantOriginalPrice + category.getPackagingCost();
-        return Math.toIntExact(Math.ceilDiv(rawPrice, 700L) * 1_000L);
-    }
 }

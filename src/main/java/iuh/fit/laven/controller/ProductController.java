@@ -22,8 +22,13 @@ public class ProductController {
     private final ProductImageService productImageService;
 
     private final UserEventService events;
+    private final iuh.fit.laven.service.PromotionService promotions;
+    private final iuh.fit.laven.repository.ColorStockRepository stocks;
 
-    public ProductController(ProductService productService, ProductImageService productImageService, UserEventService events) {
+    public ProductController(ProductService productService, ProductImageService productImageService, UserEventService events,
+                             iuh.fit.laven.service.PromotionService promotions, iuh.fit.laven.repository.ColorStockRepository stocks) {
+        this.promotions = promotions;
+        this.stocks = stocks;
         this.events = events;
         this.productService = productService;
         this.productImageService = productImageService;
@@ -50,13 +55,21 @@ public class ProductController {
         );
         var coverUrls = productImageService.findCoverUrls(products.stream().map(Product::getProductId).toList());
         var priceRanges = productService.findSalePriceRanges(products);
-        return products.stream()
-            .map(product -> new ProductResponse(product, priceRanges.get(product.getProductId()),
-                coverUrls.get(product.getProductId())))
-            .toList();
+        var actives = promotions.loadActiveProductPromotions();
+        var colors = products.isEmpty() ? java.util.Map.<String, List<ProductResponse.ColorOption>>of()
+            : stocks.findProductColors(products.stream().map(Product::getProductId).toList()).stream()
+                .collect(java.util.stream.Collectors.groupingBy(row -> row.getProductId(),
+                    java.util.stream.Collectors.mapping(row -> new ProductResponse.ColorOption(row.getColorId(), row.getName()),
+                        java.util.stream.Collectors.toList())));
+        return products.stream().map(product -> {
+            var id = product.getProductId();
+            var range = priceRanges.get(id);
+            return new ProductResponse(product, range, coverUrls.get(id),
+                promotions.finalProductPrice(product, range.min(), actives), colors.getOrDefault(id, List.of()));
+        }).toList();
     }
 
-    public record FeaturedProduct(ProductResponse product, String size, long score) {}
+    public record FeaturedProduct(ProductResponse product, String size, long score, long soldCount) {}
 
     @GetMapping("/public/products/featured")
     public List<FeaturedProduct> featured(@RequestParam(required = false) String categoryId) {
@@ -65,10 +78,13 @@ public class ProductController {
         var covers = productImageService.findCoverUrls(ids);
         var products = ids.stream().map(id -> productService.findById(id, false)).toList();
         var ranges = productService.findSalePriceRanges(products);
+        var actives = promotions.loadActiveProductPromotions();
         return java.util.stream.IntStream.range(0, ranked.size()).mapToObj(index -> {
             var row = ranked.get(index);
-            return new FeaturedProduct(new ProductResponse(products.get(index), ranges.get(row.productId()),
-                covers.get(row.productId())), row.size(), row.score());
+            var product = products.get(index);
+            var range = ranges.get(row.productId());
+            return new FeaturedProduct(new ProductResponse(product, range, covers.get(row.productId()),
+                promotions.finalProductPrice(product, range.min(), actives), List.of()), row.size(), row.score(), row.soldCount());
         }).toList();
     }
 
