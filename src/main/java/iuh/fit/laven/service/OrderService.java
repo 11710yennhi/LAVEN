@@ -36,6 +36,7 @@ public class OrderService {
     private final ColorStockRepository colorStockRepository;
     private final ShipCostRepository shipCostRepository;
     private final OrderDetailRepository orderDetailRepository;
+    private final UserEventService events;
     private final CartItemRepository cartItemRepository;
     private final ReturnRecordRepository returnRecordRepository;
     private final ReturnItemRepository returnItemRepository;
@@ -508,6 +509,9 @@ public class OrderService {
             }
             order.setOrderStatus(OrderStatus.COMPLETED);
             order.setCompletedAt(LocalDateTime.now());
+            orderDetailRepository.findAllById_OrderId(order.getOrderId()).stream()
+                .map(detail -> detail.getVariant().getProduct().getProductId()).distinct()
+                .forEach(productId -> events.recordPurchase(order.getCustomer().getUserId(), productId, order.getOrderId()));
             String customerId = order.getCustomer().getUserId();
             userService.lockIfPendingAndNoActiveOrders(customerId, hasActiveOrders(customerId));
         }

@@ -72,6 +72,7 @@ public class CategoryService {
 
         category.setCategoryId("CAT" + String.format("%03d", maxId + 1));
         category.setStatus(true);
+        category.setImageUrl(iuh.fit.laven.util.ValidationUtil.optionalImageUrl(category.getImageUrl()));
         return categoryRepository.save(category);
     }
 
@@ -85,6 +86,9 @@ public class CategoryService {
 
         category.setCategoryName(request.getCategoryName());
         category.setDescription(request.getDescription());
+        if (request.getImageUrl() != null) {
+            category.setImageUrl(iuh.fit.laven.util.ValidationUtil.optionalImageUrl(request.getImageUrl()));
+        }
         category.setPackagingCost(request.getPackagingCost());
         return categoryRepository.save(category);
     }

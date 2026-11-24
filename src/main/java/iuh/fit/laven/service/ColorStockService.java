@@ -80,6 +80,10 @@ public class ColorStockService {
     }
 
     public ColorStock createStock(String variantId, String colorId, Integer quantity) {
+        return createStock(variantId, colorId, quantity, null);
+    }
+
+    public ColorStock createStock(String variantId, String colorId, Integer quantity, String imageUrl) {
         if (quantity == null || quantity < 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tồn kho phải >= 0");
         }
@@ -91,6 +95,14 @@ public class ColorStockService {
         }
         ColorStock stock = buildStock(variantId, colorId, id);
         stock.setStock(quantity);
+        stock.setImageUrl(iuh.fit.laven.util.ValidationUtil.optionalImageUrl(imageUrl));
+        return colorStockRepository.save(stock);
+    }
+
+    public ColorStock updateImage(String variantId, String colorId, String imageUrl) {
+        ColorStock stock = colorStockRepository.findLocked(new ColorStockId(variantId, colorId))
+            .orElseThrow(() -> notFound("Tồn kho biến thể-màu"));
+        stock.setImageUrl(iuh.fit.laven.util.ValidationUtil.optionalImageUrl(imageUrl));
         return colorStockRepository.save(stock);
     }
 

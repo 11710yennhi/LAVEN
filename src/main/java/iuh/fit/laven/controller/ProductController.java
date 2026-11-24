@@ -4,6 +4,10 @@ import org.springframework.http.MediaType;
 import iuh.fit.laven.dto.response.ProductResponse;
 import iuh.fit.laven.dto.response.StaffProductResponse;
 import iuh.fit.laven.model.Product;
+import iuh.fit.laven.model.UserEvent.Type;
+import iuh.fit.laven.security.CustomUserDetails;
+import iuh.fit.laven.service.UserEventService;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import iuh.fit.laven.service.ProductImageService;
 import iuh.fit.laven.service.ProductService;
 import jakarta.validation.Valid;
@@ -17,7 +21,10 @@ public class ProductController {
     private final ProductService productService;
     private final ProductImageService productImageService;
 
-    public ProductController(ProductService productService, ProductImageService productImageService) {
+    private final UserEventService events;
+
+    public ProductController(ProductService productService, ProductImageService productImageService, UserEventService events) {
+        this.events = events;
         this.productService = productService;
         this.productImageService = productImageService;
     }
@@ -47,6 +54,22 @@ public class ProductController {
             .map(product -> new ProductResponse(product, priceRanges.get(product.getProductId()),
                 coverUrls.get(product.getProductId())))
             .toList();
+    }
+
+    public record FeaturedProduct(ProductResponse product, String size, long score) {}
+
+    @GetMapping("/public/products/featured")
+    public List<FeaturedProduct> featured(@RequestParam(required = false) String categoryId) {
+        var ranked = events.featured(categoryId);
+        var ids = ranked.stream().map(UserEventService.RankedProduct::productId).toList();
+        var covers = productImageService.findCoverUrls(ids);
+        var products = ids.stream().map(id -> productService.findById(id, false)).toList();
+        var ranges = productService.findSalePriceRanges(products);
+        return java.util.stream.IntStream.range(0, ranked.size()).mapToObj(index -> {
+            var row = ranked.get(index);
+            return new FeaturedProduct(new ProductResponse(products.get(index), ranges.get(row.productId()),
+                covers.get(row.productId())), row.size(), row.score());
+        }).toList();
     }
 
     @GetMapping("/staff/products")
@@ -79,8 +102,11 @@ public class ProductController {
     }
 
     @GetMapping("/public/products/{productId}")
-    public ProductResponse getPublicProduct(@PathVariable String productId) {
+    public ProductResponse getPublicProduct(@PathVariable String productId, @AuthenticationPrincipal CustomUserDetails principal) {
         Product product = productService.findById(productId, false);
+        if (principal != null && principal.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_CUSTOMER"))) {
+            events.record(principal.getUserId(), productId, Type.VIEW);
+        }
         return new ProductResponse(product, productService.findSalePriceRange(product));
     }
 

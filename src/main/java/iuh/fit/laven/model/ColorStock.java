@@ -35,4 +35,7 @@ public class ColorStock {
     @PositiveOrZero
     @Column(nullable = false)
     private Integer stock = 0;
+
+    @Column(length = 2048)
+    private String imageUrl;
 }
