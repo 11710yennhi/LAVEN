@@ -204,15 +204,14 @@ public class SemanticSearchService {
     /**
      * Giá nằm ở Variant: tính giá cuối (sau khuyến mãi) của từng size, chỉ giữ size nằm trong khoảng giá.
      * Trả null nếu không có size nào khớp (sản phẩm bị loại).
-     * Service không có transaction và Variant.product là LAZY, nên giá bán tính bằng product.calcSalePrice(...)
-     * từ product đang có trong tay (category EAGER), không gọi variant.getProduct().
+     * Truy vấn nạp sẵn sản phẩm và danh mục để biến thể tính giá bán.
      */
     private Item toItem(Product product, Double score, List<ScopedPromotion> actives,
                         Integer minPrice, Integer maxPrice) {
         List<Integer> salePrices = new ArrayList<>();
         List<Integer> finalPrices = new ArrayList<>();
         variantRepository.findByProductProductId(product.getProductId()).stream()
-                .map(variant -> product.calcSalePrice(variant.getOriginalPrice()))
+                .map(variant -> variant.getSalePrice())
                 .filter(Objects::nonNull)
                 .forEach(salePrice -> {
                     int discount = promotionService.findBestProductPromotion(product, salePrice, actives)

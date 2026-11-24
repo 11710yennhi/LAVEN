@@ -9,10 +9,12 @@ public class CategoryResponse {
     private final String categoryId;
     private final String categoryName;
     private final String description;
+    private final String imageUrl;
 
     public CategoryResponse(Category category) {
         this.categoryId = category.getCategoryId();
         this.categoryName = category.getCategoryName();
         this.description = category.getDescription();
+        this.imageUrl = category.getImageUrl();
     }
 }

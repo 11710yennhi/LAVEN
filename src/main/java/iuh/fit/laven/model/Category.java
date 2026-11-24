@@ -37,4 +37,11 @@ public class Category {
 
     @Column(nullable = false)
     private boolean status = true;
+
+    @Column(length = 2048)
+    private String imageUrl;
+
+    public Category(String categoryId, String categoryName, String description, Integer packagingCost, boolean status) {
+        this(categoryId, categoryName, description, packagingCost, status, null);
+    }
 }

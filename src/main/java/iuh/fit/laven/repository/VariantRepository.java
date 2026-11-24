@@ -11,14 +11,14 @@ import java.util.List;
 import java.util.Optional;
 
 public interface VariantRepository extends JpaRepository<Variant, String> {
-    // Nạp sẵn product (category EAGER) để tính salePrice được cả ngoài transaction
-    @EntityGraph(attributePaths = "product")
+    // Nạp cả danh mục để tính giá bán từ phí đóng gói sau khi truy vấn.
+    @EntityGraph(attributePaths = "product.category")
     List<Variant> findByProductProductId(String productId);
 
-    @EntityGraph(attributePaths = "product")
+    @EntityGraph(attributePaths = "product.category")
     List<Variant> findByProductProductIdIn(Collection<String> productIds);
 
-    @EntityGraph(attributePaths = "product")
+    @EntityGraph(attributePaths = "product.category")
 
     @Query("""
         SELECT v FROM Variant v
@@ -60,6 +60,6 @@ public interface VariantRepository extends JpaRepository<Variant, String> {
         @Param("maxHeight") Double maxHeight
     );
 
-    @EntityGraph(attributePaths = "product")
+    @EntityGraph(attributePaths = "product.category")
     Optional<Variant> findByVariantId(String variantId);
 }

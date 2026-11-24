@@ -16,8 +16,9 @@ class ProductImageCloudinaryServiceTest {
 
     @Test
     void signsOnlyTheSelectedProductUpload() throws Exception {
-        ProductImageUploadSignatureResponse result = service.signUpload("PRO123");
-        String signedText = "public_id=" + result.getPublicId() + "&timestamp=" + result.getTimestamp()
+        ProductImageUploadSignatureResponse result = service.signUpload("PRO123", "Balo");
+        assertEquals("balo", result.getAssetFolder());
+        String signedText = "asset_folder=balo&public_id=" + result.getPublicId() + "&timestamp=" + result.getTimestamp()
             + "private-secret";
         byte[] digest = MessageDigest.getInstance("SHA-1")
             .digest(signedText.getBytes(StandardCharsets.UTF_8));

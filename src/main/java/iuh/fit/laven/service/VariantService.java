@@ -1,5 +1,6 @@
 package iuh.fit.laven.service;
 
+import iuh.fit.laven.dto.response.StaffVariantResponse;
 import iuh.fit.laven.model.Product;
 import iuh.fit.laven.model.Variant;
 import iuh.fit.laven.repository.ProductRepository;
@@ -55,15 +56,15 @@ public class VariantService {
         );
     }
 
-    public Variant create(String productId, Variant variant) {
+    public StaffVariantResponse create(String productId, Variant variant) {
         validatePrice(variant.getOriginalPrice());
         variant.setProduct(requireProduct(productId, false));
         variant.setVariantId(nextVariantId());
-        return variantRepository.save(variant);
+        return new StaffVariantResponse(variantRepository.save(variant));
     }
 
-    public Variant update(String id, Variant request) {
-        Variant variant = variantRepository.findByVariantId(id) // nạp kèm product để tính salePrice
+    public StaffVariantResponse update(String id, Variant request) {
+        Variant variant = variantRepository.findByVariantId(id)
             .orElseThrow(() -> notFound("Biến thể"));
         validatePrice(request.getOriginalPrice());
         variant.setOriginalPrice(request.getOriginalPrice());
@@ -73,7 +74,7 @@ public class VariantService {
         variant.setLength(request.getLength());
         variant.setWidth(request.getWidth());
         variant.setHeight(request.getHeight());
-        return variantRepository.save(variant);
+        return new StaffVariantResponse(variantRepository.save(variant));
     }
 
     /** Giá nhập theo size, phải lớn hơn 1.000 đồng (giống ràng buộc cũ của Product). */

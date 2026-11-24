@@ -8,6 +8,23 @@ import java.util.regex.Pattern;
 
 /** Các kiểm tra định dạng dùng chung cho đăng ký, hồ sơ, tạo nhân viên (theo mục h của tài liệu). */
 public final class ValidationUtil {
+    public static String optionalImageUrl(String value) {
+        if (value == null || value.isBlank()) return null;
+        String url = value.strip();
+        if (url.length() <= 2048) {
+            try {
+                var uri = java.net.URI.create(url);
+                if (uri.getHost() != null && uri.getUserInfo() == null
+                    && ("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme()))) {
+                    return url;
+                }
+            } catch (IllegalArgumentException ignored) {
+                // Invalid URI syntax.
+            }
+        }
+        throw new org.springframework.web.server.ResponseStatusException(
+            org.springframework.http.HttpStatus.BAD_REQUEST, "URL ảnh phải là HTTP hoặc HTTPS hợp lệ, tối đa 2048 ký tự");
+    }
 
     private static final Pattern EMAIL_PATTERN =
             Pattern.compile("^[A-Za-z0-9._%+-]+@gmail\\.com$", Pattern.CASE_INSENSITIVE);

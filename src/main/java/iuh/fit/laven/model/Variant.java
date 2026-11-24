@@ -61,6 +61,18 @@ public class Variant {
     @Transient
     @JsonIgnore
     public Integer getSalePrice() {
-        return product == null ? null : product.calcSalePrice(originalPrice);
+        return calcSalePrice();
+    }
+
+    private Integer calcSalePrice() {
+        if (product == null || product.getCategory() == null || originalPrice == null) {
+            return null;
+        }
+        Integer packagingCost = product.getCategory().getPackagingCost();
+        if (packagingCost == null) {
+            return null;
+        }
+        long rawPrice = (long) originalPrice + packagingCost;
+        return Math.toIntExact(Math.ceilDiv(rawPrice, 700L) * 1_000L);
     }
 }

@@ -18,4 +18,5 @@ public class ProductImageUploadSignatureResponse {
     private long timestamp;
     private String publicId;
     private String signature;
+    private String assetFolder;
 }

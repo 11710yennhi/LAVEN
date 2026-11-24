@@ -59,6 +59,12 @@ public class ProductImageController {
         return new MessageResponse("Xóa ảnh sản phẩm thành công");
     }
 
+    @PutMapping("/staff/products/{productId}/images/{imageId}/cover")
+    public MessageResponse setCover(@PathVariable String productId, @PathVariable String imageId) {
+        productImageService.setCover(productId, imageId);
+        return new MessageResponse("Đã cập nhật ảnh bìa");
+    }
+
     // ===== Các API tìm kiếm & đọc ảnh =====
 
     @GetMapping("/public/images")

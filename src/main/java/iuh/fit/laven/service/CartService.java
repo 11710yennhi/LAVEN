@@ -38,6 +38,7 @@ public class CartService {
     private final ColorStockRepository colorStockRepository;
     private final UserRepository userRepository;
     private final PromotionService promotionService;
+    private final UserEventService events;
 
     // =====================================================================
     // UC08: giỏ hàng của Customer (lưu DB)
@@ -62,6 +63,7 @@ public class CartService {
         int newQuantity = existing + quantity;
         validateQuantity(newQuantity, stock);
         upsert(cart, stock, newQuantity);
+        events.record(customerId, stock.getVariant().getProduct().getProductId(), iuh.fit.laven.model.UserEvent.Type.ADD_TO_CART);
         return buildCart(cart);
     }
 

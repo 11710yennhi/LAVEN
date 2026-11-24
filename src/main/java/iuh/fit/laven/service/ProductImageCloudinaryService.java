@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.net.URI;
+import java.text.Normalizer;
+import java.util.Locale;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
@@ -38,7 +40,7 @@ public class ProductImageCloudinaryService {
     /**
      * Tạo chữ ký số để React gửi file thẳng lên Cloudinary.
      */
-    public ProductImageUploadSignatureResponse signUpload(String productId) {
+    public ProductImageUploadSignatureResponse signUpload(String productId, String categoryName) {
         requireConfiguration();
         long timestamp = Instant.now().getEpochSecond();
         String publicId = "laven/products/" + productId + "/" + UUID.randomUUID();
@@ -46,12 +48,16 @@ public class ProductImageCloudinaryService {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("timestamp", timestamp);
         parameters.put("public_id", publicId);
+        String assetFolder = categoryFolder(categoryName);
+        if (assetFolder != null) {
+            parameters.put("asset_folder", assetFolder);
+        }
 
         Cloudinary cloudinary = getCloudinary();
         cloudinary.signRequest(parameters, Map.of());
 
         return new ProductImageUploadSignatureResponse(
-            cloudName, apiKey, timestamp, publicId, (String) parameters.get("signature")
+            cloudName, apiKey, timestamp, publicId, (String) parameters.get("signature"), assetFolder
         );
     }
 
@@ -91,20 +97,28 @@ public class ProductImageCloudinaryService {
      * Xóa ảnh trực tiếp trên Cloudinary bằng URL.
      */
     public void deleteByUrl(String imageUrl) {
-        if (imageUrl == null || imageUrl.isBlank()) {
+        if (imageUrl == null || imageUrl.isBlank() || cloudName.isBlank()) {
             return;
         }
         try {
-            String publicId = extractPublicId(imageUrl);
+            URI uri = URI.create(imageUrl);
+            if (!"https".equalsIgnoreCase(uri.getScheme())
+                || !"res.cloudinary.com".equalsIgnoreCase(uri.getHost())
+                || uri.getPath() == null || !uri.getPath().startsWith("/" + cloudName + "/image/upload/")) {
+                return;
+            }
+            String publicId = extractPublicId(uri.getPath());
             if (publicId != null && !publicId.isBlank()) {
-                Cloudinary cloudinary = getCloudinary();
-                cloudinary.uploader().destroy(publicId, ObjectUtils.emptyMap());
+                requireConfiguration();
+                Map<?, ?> result = getCloudinary().uploader().destroy(publicId, ObjectUtils.asMap("invalidate", true));
+                if (!"ok".equals(result.get("result")) && !"not found".equals(result.get("result"))) {
+                    throw new IllegalStateException("Cloudinary không xác nhận xóa ảnh");
+                }
             }
         } catch (Exception ex) {
-            // Không làm gián đoạn luồng nếu xóa ảnh trên Cloudinary gặp sự cố mạng
+            throw new IllegalStateException("Không xóa được ảnh sản phẩm trên Cloudinary", ex);
         }
     }
-
     /**
      * Bóc tách public_id từ URL ảnh Cloudinary.
      */
@@ -131,6 +145,18 @@ public class ProductImageCloudinaryService {
         } catch (Exception ex) {
             return null;
         }
+    }
+
+    private String categoryFolder(String categoryName) {
+        if (categoryName == null) {
+            return null;
+        }
+        String name = Normalizer.normalize(categoryName, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "").strip().toLowerCase(Locale.ROOT);
+        if (name.matches("va\\s*li(?:\\b.*)?")) return "vali";
+        if (name.matches("ba\\s*lo(?:\\b.*)?")) return "balo";
+        if (name.matches("tui\\s*xach(?:\\b.*)?")) return "tuixach";
+        return null;
     }
 
     private Cloudinary getCloudinary() {

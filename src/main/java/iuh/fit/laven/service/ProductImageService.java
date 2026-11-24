@@ -22,19 +22,32 @@ public class ProductImageService {
     private final ProductImageRepository imageRepository;
     private final ProductRepository productRepository;
     private final ProductImageCloudinaryService cloudinaryService;
+    private final org.springframework.context.ApplicationEventPublisher events;
 
     public ProductImageService(ProductImageRepository imageRepository,
                                ProductRepository productRepository,
-                               ProductImageCloudinaryService cloudinaryService) {
+                               ProductImageCloudinaryService cloudinaryService,
+                               org.springframework.context.ApplicationEventPublisher events) {
         this.imageRepository = imageRepository;
         this.productRepository = productRepository;
         this.cloudinaryService = cloudinaryService;
+        this.events = events;
     }
 
     @Transactional(readOnly = true)
     public List<ProductImage> findByProduct(String productId, boolean includeInactiveProduct) {
-        requireProduct(productId, includeInactiveProduct);
-        return imageRepository.findByProductProductIdOrderByProductImageIdAsc(productId);
+        Product product = requireProduct(productId, includeInactiveProduct);
+        return imageRepository.findByProductProductIdOrderByProductImageIdAsc(productId).stream()
+            .sorted(java.util.Comparator.comparing(image -> !image.getProductImageId().equals(product.getCoverImageId())))
+            .toList();
+    }
+
+    public void setCover(String productId, String imageId) {
+        Product product = requireProduct(productId, true);
+        ProductImage image = imageRepository.findById(imageId)
+            .filter(candidate -> candidate.getProduct().getProductId().equals(productId))
+            .orElseThrow(() -> notFound("Ảnh sản phẩm"));
+        product.setCoverImageId(image.getProductImageId());
     }
 
     @Transactional(readOnly = true)
@@ -56,15 +69,15 @@ public class ProductImageService {
      * 1. Lấy chữ ký số để React gửi file thẳng lên Cloudinary
      */
     public ProductImageUploadSignatureResponse getUploadSignature(String productId) {
-        requireProduct(productId, false);
-        return cloudinaryService.signUpload(productId);
+        Product product = requireProduct(productId, true);
+        return cloudinaryService.signUpload(productId, product.getCategory().getCategoryName());
     }
 
     /**
      * 2. Thêm ảnh mới (Add): Nhận URL từ React sau khi tải lên Cloudinary
      */
     public ProductImage addImage(String productId, String imageUrl) {
-        Product product = requireProduct(productId, false);
+        Product product = requireProduct(productId, true);
         String validUrl = cloudinaryService.validateImageUrl(imageUrl, productId);
 
         ProductImage image = new ProductImage();
@@ -88,7 +101,9 @@ public class ProductImageService {
         ProductImage saved = imageRepository.save(image);
 
         // Dọn ảnh cũ trên Cloudinary
-        cloudinaryService.deleteByUrl(oldImageUrl);
+        if (oldImageUrl != null && !oldImageUrl.equals(validUrl)) {
+            events.publishEvent(new ProductImageCleanup.RemovedImage(oldImageUrl));
+        }
         return saved;
     }
 
@@ -99,8 +114,13 @@ public class ProductImageService {
         ProductImage image = imageRepository.findById(imageId)
             .orElseThrow(() -> notFound("Ảnh sản phẩm"));
 
-        cloudinaryService.deleteByUrl(image.getImageUrl());
+
+        Product product = image.getProduct();
+        if (imageId.equals(product.getCoverImageId())) {
+            product.setCoverImageId(null);
+        }
         imageRepository.delete(image);
+        events.publishEvent(new ProductImageCleanup.RemovedImage(image.getImageUrl()));
     }
 
     private String blank(String value) {

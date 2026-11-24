@@ -49,15 +49,24 @@ public class FirebaseChatService {
         } catch (FirebaseAuthException ex) {
             throw new AppException(HttpStatus.SERVICE_UNAVAILABLE, "Không tạo được Firebase token");
         }
-        List<ChatSessionResponse.Customer> customers = user.getRole() == UserRole.CUSTOMER
-                ? List.of()
-                : userRepository.findByRole(UserRole.CUSTOMER).stream()
-                    .filter(User::isStatus)
-                    .map(c -> new ChatSessionResponse.Customer(c.getUserId(), c.getFullName()))
-                    .toList();
         return new ChatSessionResponse(firebaseToken, userId, user.getFullName(), user.getRole(),
                 new ChatSessionResponse.FirebaseWebConfig(webApiKey, authDomain, databaseUrl, projectId, appId),
-                customers);
+                List.of());
+    }
+
+    public List<ChatSessionResponse.Customer> findCustomers(String readerId, List<String> ids) {
+        User reader = userRepository.findById(readerId)
+                .orElseThrow(() -> new AppException(HttpStatus.UNAUTHORIZED, "Người dùng không tồn tại"));
+        if (!reader.isStatus() || (reader.getRole() != UserRole.STAFF && reader.getRole() != UserRole.ADMIN)) {
+            throw new AppException(HttpStatus.FORBIDDEN, "Không có quyền xem khách hàng");
+        }
+        if (ids.size() > 10) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Chỉ được tìm tối đa 10 khách hàng");
+        }
+        return userRepository.findAllById(ids).stream()
+                .filter(customer -> customer.getRole() == UserRole.CUSTOMER)
+                .map(customer -> new ChatSessionResponse.Customer(customer.getUserId(), customer.getFullName()))
+                .toList();
     }
 
     private synchronized FirebaseAuth getFirebaseAuth() {

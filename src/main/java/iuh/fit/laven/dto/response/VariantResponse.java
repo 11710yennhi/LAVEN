@@ -15,9 +15,15 @@ public class VariantResponse {
     private final Double width;
     private final Double height;
     private final Integer salePrice;
+    private final Integer finalPrice;
 
     /** variant.product phải đã được nạp (VariantRepository có @EntityGraph). */
     public VariantResponse(Variant variant) {
+        this(variant, variant.getSalePrice());
+    }
+
+    public VariantResponse(Variant variant, Integer finalPrice) {
+        this.finalPrice = finalPrice;
         this.variantId = variant.getVariantId();
         this.productId = variant.getProduct().getProductId();
         this.size = variant.getSize();

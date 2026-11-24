@@ -11,7 +11,11 @@ public class StaffProductResponse extends ProductResponse {
     private final String stopSellingReason;
 
     public StaffProductResponse(Product product, SalePriceRange priceRange) {
-        super(product, priceRange);
+        this(product, priceRange, null);
+    }
+
+    public StaffProductResponse(Product product, SalePriceRange priceRange, String imageUrl) {
+        super(product, priceRange, imageUrl);
         this.packagingCost = product.getCategory().getPackagingCost();
         this.status = product.isStatus();
         this.stopSellingReason = product.getStopSellingReason();

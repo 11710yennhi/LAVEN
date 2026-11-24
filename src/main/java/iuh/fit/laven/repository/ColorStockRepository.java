@@ -14,6 +14,19 @@ import java.util.Optional;
 public interface ColorStockRepository extends JpaRepository<ColorStock, ColorStockId> {
     List<ColorStock> findByVariantProductProductId(String productId);
 
+    interface ProductColor {
+        String getProductId();
+        String getColorId();
+        String getName();
+    }
+
+    @org.springframework.data.jpa.repository.Query("""
+        SELECT DISTINCT s.variant.product.productId AS productId, s.color.colorId AS colorId, s.color.name AS name
+        FROM ColorStock s WHERE s.variant.product.productId IN :ids
+        ORDER BY s.variant.product.productId, s.color.name, s.color.colorId
+        """)
+    List<ProductColor> findProductColors(@org.springframework.data.repository.query.Param("ids") List<String> ids);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select stock from ColorStock stock where stock.id = :id")
     Optional<ColorStock> findLocked(@Param("id") ColorStockId id);
@@ -56,4 +69,5 @@ public interface ColorStockRepository extends JpaRepository<ColorStock, ColorSto
             @Param("variantId") String variantId,
             @Param("colorId") String colorId
     );
+    boolean existsByImageUrl(String imageUrl);
 }

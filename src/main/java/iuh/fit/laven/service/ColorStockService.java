@@ -23,15 +23,18 @@ public class ColorStockService {
     private final ProductRepository productRepository;
     private final VariantRepository variantRepository;
     private final ColorRepository colorRepository;
+    private final org.springframework.context.ApplicationEventPublisher events;
 
     public ColorStockService(ColorStockRepository colorStockRepository,
                              ProductRepository productRepository,
                              VariantRepository variantRepository,
-                             ColorRepository colorRepository) {
+                             ColorRepository colorRepository,
+                             org.springframework.context.ApplicationEventPublisher events) {
         this.colorStockRepository = colorStockRepository;
         this.productRepository = productRepository;
         this.variantRepository = variantRepository;
         this.colorRepository = colorRepository;
+        this.events = events;
     }
 
     @Transactional(readOnly = true)
@@ -80,6 +83,10 @@ public class ColorStockService {
     }
 
     public ColorStock createStock(String variantId, String colorId, Integer quantity) {
+        return createStock(variantId, colorId, quantity, null);
+    }
+
+    public ColorStock createStock(String variantId, String colorId, Integer quantity, String imageUrl) {
         if (quantity == null || quantity < 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tồn kho phải >= 0");
         }
@@ -91,7 +98,21 @@ public class ColorStockService {
         }
         ColorStock stock = buildStock(variantId, colorId, id);
         stock.setStock(quantity);
+        stock.setImageUrl(iuh.fit.laven.util.ValidationUtil.optionalImageUrl(imageUrl));
         return colorStockRepository.save(stock);
+    }
+
+    public ColorStock updateImage(String variantId, String colorId, String imageUrl) {
+        ColorStock stock = colorStockRepository.findLocked(new ColorStockId(variantId, colorId))
+            .orElseThrow(() -> notFound("Tồn kho biến thể-màu"));
+        String previousUrl = stock.getImageUrl();
+        String newUrl = iuh.fit.laven.util.ValidationUtil.optionalImageUrl(imageUrl);
+        stock.setImageUrl(newUrl);
+        ColorStock saved = colorStockRepository.save(stock);
+        if (previousUrl != null && !previousUrl.equals(newUrl)) {
+            events.publishEvent(new ProductImageCleanup.RemovedImage(previousUrl));
+        }
+        return saved;
     }
 
     public ColorStock adjustStock(String variantId, String colorId, int delta) {

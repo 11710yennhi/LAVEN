@@ -267,6 +267,11 @@ public class PromotionService {
         return Optional.ofNullable(best);
     }
 
+    public Integer finalProductPrice(Product product, Integer salePrice, List<ScopedPromotion> actives) {
+        if (salePrice == null) return null;
+        return salePrice - findBestProductPromotion(product, salePrice, actives).map(AppliedPromotion::discount).orElse(0);
+    }
+
     public Optional<AppliedPromotion> findBestProductPromotion(Product product, int salePrice) {
         return findBestProductPromotion(product, salePrice, loadActiveProductPromotions());
     }

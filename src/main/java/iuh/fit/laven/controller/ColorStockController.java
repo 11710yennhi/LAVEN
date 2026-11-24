@@ -75,9 +75,20 @@ public class ColorStockController {
     public ColorStock createStock(
         @PathVariable String variantId,
         @PathVariable String colorId,
-        @RequestParam Integer quantity
+        @RequestParam Integer quantity, @RequestParam(required = false) String imageUrl
     ) {
-        return colorStockService.createStock(variantId, colorId, quantity);
+        return colorStockService.createStock(variantId, colorId, quantity, imageUrl);
+    }
+
+    public record StockImageRequest(String imageUrl) {}
+
+    @PutMapping("/staff/stocks/{variantId}/{colorId}/image")
+    public ColorStock updateImage(
+        @PathVariable String variantId,
+        @PathVariable String colorId,
+        @RequestBody StockImageRequest request
+    ) {
+        return colorStockService.updateImage(variantId, colorId, request.imageUrl());
     }
 
     @PostMapping("/staff/stocks/{variantId}/{colorId}/adjustment")

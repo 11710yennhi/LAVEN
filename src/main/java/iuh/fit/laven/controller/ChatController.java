@@ -9,6 +9,9 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import java.util.List;
 
 /** Chat dùng phiên JWT LAVEN hiện tại, không yêu cầu đăng nhập lần thứ hai. */
 @RestController
@@ -20,5 +23,11 @@ public class ChatController {
     @GetMapping("/session")
     public ChatSessionResponse session(@AuthenticationPrincipal CustomUserDetails user) {
         return firebaseChatService.createSession(user.getUserId());
+    }
+
+    @GetMapping("/customers")
+    public List<ChatSessionResponse.Customer> customers(@AuthenticationPrincipal CustomUserDetails user,
+                                                        @RequestParam List<String> ids) {
+        return firebaseChatService.findCustomers(user.getUserId(), ids);
     }
 }
