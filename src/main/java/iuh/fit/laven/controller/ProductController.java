@@ -103,7 +103,7 @@ public class ProductController {
         @RequestParam(required = false) Integer maxPrice,
         @RequestParam(required = false) Integer minOriginalPrice,
         @RequestParam(required = false) Integer maxOriginalPrice,
-        @RequestParam(required = false) Boolean status
+        @RequestParam(required = false) Boolean status, @RequestParam(defaultValue = "false") boolean lowStock
     ) {
         // minOriginalPrice/maxOriginalPrice: lọc theo giá nhập của biến thể (có ít nhất 1 size nằm trong khoảng)
         List<Product> products = productService.search(
@@ -111,6 +111,11 @@ public class ProductController {
             material, size, colorId, minPrice, maxPrice,
             minOriginalPrice, maxOriginalPrice, status, true
         );
+        if (lowStock) {
+            var lowStockIds = stocks.findActiveLowStockProductIds(
+                iuh.fit.laven.repository.ColorStockRepository.LOW_STOCK_THRESHOLD);
+            products = products.stream().filter(product -> lowStockIds.contains(product.getProductId())).toList();
+        }
         var priceRanges = productService.findSalePriceRanges(products);
         var covers = productImageService.findCoverUrls(products.stream().map(Product::getProductId).toList());
         return products.stream()

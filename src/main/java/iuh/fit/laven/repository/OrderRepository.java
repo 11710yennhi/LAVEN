@@ -2,6 +2,8 @@ package iuh.fit.laven.repository;
 
 import iuh.fit.laven.model.Order;
 import iuh.fit.laven.model.enums.OrderStatus;
+import iuh.fit.laven.model.enums.PaymentStatus;
+import java.time.LocalDateTime;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -57,4 +59,42 @@ public interface OrderRepository extends JpaRepository<Order, String>, JpaSpecif
             @Param("orderId") String orderId
     );
 
+
+    interface Totals {
+        long getOrders();
+        long getAmount();
+    }
+
+    interface StatusCount {
+        OrderStatus getStatus();
+        long getOrders();
+    }
+
+    @Query("""
+        SELECT COUNT(o) AS orders, COALESCE(SUM(o.totalAmount), 0) AS amount FROM Order o
+        WHERE o.createdAt >= :start AND o.createdAt < :end AND o.orderStatus <> :excluded
+        """)
+    Totals summarizeCreatedOrders(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end,
+                                  @Param("excluded") OrderStatus excluded);
+
+    @Query("SELECT o.orderStatus AS status, COUNT(o) AS orders FROM Order o GROUP BY o.orderStatus")
+    List<StatusCount> countGroupedByOrderStatus();
+
+    long countByPaymentStatus(PaymentStatus status);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.orderStatus = :status AND o.finalizedAt IS NULL")
+    long sumUnfinalizedOrders(@Param("status") OrderStatus status);
+
+    List<Order> findTop8ByOrderByCreatedAtDescOrderIdDesc();
+
+    @Query("""
+        SELECT COALESCE(SUM(o.totalAmount - CASE
+            WHEN r.returnType = CUSTOMER_RETURN AND
+                (r.status = RECEIVED OR (r.returnReason = NOT_RECEIVED AND r.status = APPROVED))
+            THEN COALESCE(r.refundAmount, 0) ELSE 0 END), 0) AS amount, COUNT(o) AS orders
+        FROM Order o LEFT JOIN o.returnRecord r
+        WHERE o.finalizedAt >= :start AND o.finalizedAt < :end
+          AND o.orderStatus IN (COMPLETED, RETURNED)
+        """)
+    Totals summarizeFinalizedOrders(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 }
