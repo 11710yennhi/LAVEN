@@ -31,4 +31,8 @@ public interface UserRepository extends JpaRepository<User, String> {
     List<User> search(@Param("role") UserRole role, @Param("keyword") String keyword);
 
     Optional<User> findByUserId(String userId);
+
+    long countByRole(UserRole role);
+
+    long countByRoleAndUserIdStartingWith(UserRole role, String userIdPrefix);
 }

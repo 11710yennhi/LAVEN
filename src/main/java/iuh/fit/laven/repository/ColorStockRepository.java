@@ -3,6 +3,7 @@ package iuh.fit.laven.repository;
 import iuh.fit.laven.model.ColorStock;
 import iuh.fit.laven.model.id.ColorStockId;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -13,6 +14,8 @@ import java.util.Optional;
 
 public interface ColorStockRepository extends JpaRepository<ColorStock, ColorStockId> {
     List<ColorStock> findByVariantProductProductId(String productId);
+
+    int LOW_STOCK_THRESHOLD = 5;
 
     interface ProductColor {
         String getProductId();
@@ -70,4 +73,24 @@ public interface ColorStockRepository extends JpaRepository<ColorStock, ColorSto
             @Param("colorId") String colorId
     );
     boolean existsByImageUrl(String imageUrl);
+
+    @Query("""
+        SELECT COUNT(s) FROM ColorStock s JOIN s.variant v JOIN v.product p
+        WHERE s.stock <= :threshold AND p.status = true AND p.category.status = true
+        """)
+    long countActiveLowStock(@Param("threshold") int threshold);
+
+    @Query("""
+        SELECT DISTINCT p.productId FROM ColorStock s JOIN s.variant v JOIN v.product p
+        WHERE s.stock <= :threshold AND p.status = true AND p.category.status = true
+        """)
+    java.util.Set<String> findActiveLowStockProductIds(@Param("threshold") int threshold);
+
+    @Query("""
+        SELECT s FROM ColorStock s JOIN FETCH s.variant v JOIN FETCH v.product p
+        JOIN FETCH p.category JOIN FETCH s.color
+        WHERE s.stock <= :threshold AND p.status = true AND p.category.status = true
+        ORDER BY s.stock, v.variantId, s.id.colorId
+        """)
+    List<ColorStock> findActiveLowStock(@Param("threshold") int threshold, Pageable pageable);
 }
