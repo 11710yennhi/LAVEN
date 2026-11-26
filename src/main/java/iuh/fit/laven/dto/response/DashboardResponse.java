@@ -15,7 +15,7 @@ public record DashboardResponse(Todo todo, Today today, Month month, long provis
     public record Todo(long pending, long waitingPay, long toShip, long refundPending,
                        long returnRequested, long returnInTransit) {}
     public record Today(long orders, long amount, long customers, long revenueDelta) {}
-    public record Month(long revenue, long orders) {}
+    public record Month(long revenue, long orders, Long estimatedProfit) {}
     public record Revenue(String key, String label, long revenue, long orders) {}
     public record RecentOrder(String orderId, String receiverName, int totalAmount, LocalDateTime createdAt,
                               OrderStatus orderStatus, PaymentStatus paymentStatus, PaymentMethod paymentMethod,

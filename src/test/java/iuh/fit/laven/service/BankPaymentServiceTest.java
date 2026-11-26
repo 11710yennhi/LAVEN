@@ -32,7 +32,7 @@ class BankPaymentServiceTest {
     }
 
     @Test
-    void validIncomingTransferConfirmsOrderAndStoresTransaction() {
+    void validIncomingTransferMarksPaidAndLeavesOrderPending() {
         Order order = pendingOrder();
         when(orders.findByOrderIdForUpdate(orderId)).thenReturn(Optional.of(order));
 
@@ -40,15 +40,15 @@ class BankPaymentServiceTest {
 
         assertTrue(message.contains(orderId));
         assertEquals(PaymentStatus.PAID, order.getPaymentStatus());
-        assertEquals(OrderStatus.CONFIRMED, order.getOrderStatus());
+        assertEquals(OrderStatus.PENDING, order.getOrderStatus());
         assertNotNull(order.getPaidAt());
-        assertNotNull(order.getConfirmedAt());
+        assertNull(order.getConfirmedAt());
         assertNull(order.getConfirmedBy());
         verify(transactions).save(any(BankTransaction.class));
     }
 
     @Test
-    void wrongAccountOrAmountDoesNotConfirmOrder() {
+    void wrongAccountOrAmountDoesNotMarkPaid() {
         SepayWebhookRequest transfer = incomingTransfer();
         transfer.setAccountNumber("other-account");
         service.processWebhook("Apikey secret", transfer);

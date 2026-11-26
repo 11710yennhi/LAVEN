@@ -17,9 +17,10 @@ trả các field gốc của nhóm Hà: `bankName`, `bankAccount`, `accountName`
 hay đường dẫn API của Hà.
 SePay gửi webhook; `BankPaymentService` kiểm tra API key, tài khoản, mã đơn,
 số tiền và ID giao dịch. Một transaction MariaDB lưu `bank_transactions`,
-chuyển `paymentStatus=PAID`, `orderStatus=CONFIRMED` và ghi thời điểm.
+chuyển `paymentStatus=PAID`, ghi `paidAt` và giữ `orderStatus=PENDING`.
 React chỉ đọc trạng thái đơn, không được tự xác nhận thanh toán.
-Webhook tự đổi `PENDING -> PAID` và `PENDING -> CONFIRMED`. Endpoint
+Nhân viên bấm **Xác nhận đơn** để chuyển orderStatus sang CONFIRMED và ghi
+confirmedBy, confirmedAt. Endpoint
 `payment-notify` và API nhân viên cũ của nhóm Hà được giữ nguyên; cần thống nhất
 với Hà trước khi thay luồng cũ ở frontend.
 
@@ -29,8 +30,8 @@ Nếu webhook lỗi nhưng tiền đã vào tài khoản, nhân viên kiểm tra
 "transferContent":"ORD...","transactionDate":"2026-11-22T12:30:00"}`.
 Server đối chiếu tài khoản, số tiền, mã đơn và mã tham chiếu; lưu bản ghi
 `bank_transactions` có `gateway=MANUAL_VERIFIED` và `transactionId=MANUAL:FT123`
-để phân biệt với webhook SePay. `confirmedBy` là nhân viên; đơn đổi
-`PAID/CONFIRMED` trong cùng transaction. Không được dùng mã tham chiếu hai lần.
+để phân biệt với webhook SePay. Thanh toán chuyển sang `PAID`, đơn vẫn
+`PENDING` cho đến khi nhân viên xác nhận đơn. Không được dùng mã tham chiếu hai lần.
 
 ## Chat
 
@@ -48,7 +49,7 @@ tiếng Anh trên. Hiện frontend chưa thực hiện bước này.
 
 Frontend `PaymentPage.jsx` đã đọc được QR nhờ các field bổ sung, nhưng vẫn còn
 nút “Tôi đã chuyển khoản” gọi endpoint cũ, và trang nhân viên vẫn gọi API xác
-nhận cũ. Backend tự đổi `PAID/CONFIRMED` từ webhook không phụ thuộc nút này.
+nhận cũ. Backend tự đổi thanh toán sang `PAID` từ webhook không phụ thuộc nút này.
 Để dùng thao tác xác nhận thủ công trên giao diện, frontend phải gọi endpoint
 `/payment/manual` cùng dữ liệu giao dịch đã đối chiếu; frontend chưa được sửa
 trong lần tích hợp backend này.
