@@ -1,5 +1,14 @@
 {
   "rules": {
+    "chatReadCursors": {
+      "$readerId": {
+        ".read": "auth != null && auth.uid === $readerId && (auth.token.role === 'CUSTOMER' || auth.token.role === 'STAFF' || auth.token.role === 'ADMIN')",
+        "$customerId": {
+          ".write": "auth != null && auth.uid === $readerId && newData.exists() && ((auth.token.role === 'CUSTOMER' && auth.uid === $customerId) || auth.token.role === 'STAFF' || auth.token.role === 'ADMIN')",
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120 && root.child('chats').child($customerId).child('messages').child(newData.val()).exists()"
+        }
+      }
+    },
     "chats": {
       ".read": "auth != null && (auth.token.role === 'STAFF' || auth.token.role === 'ADMIN')",
       "$customerId": {
@@ -8,12 +17,30 @@
           "$messageId": {
             ".write": "auth != null && !data.exists() && newData.exists() && newData.child('senderId').val() === auth.uid && ((auth.token.role === 'CUSTOMER' && auth.uid === $customerId) || auth.token.role === 'STAFF' || auth.token.role === 'ADMIN')",
             ".validate": "newData.hasChildren(['senderId', 'content', 'sentAt'])",
-            "senderId": { ".validate": "newData.isString()" },
-            "content": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 1000" },
-            "sentAt": { ".validate": "newData.isString() && newData.val().length === 19" },
-            "$other": { ".validate": false }
+            "senderId": {
+              ".validate": "newData.isString()"
+            },
+            "senderRole": {
+              ".validate": "newData.isString() && newData.val() === auth.token.role"
+            },
+            "content": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 1000"
+            },
+            "sentAt": {
+              ".validate": "newData.isString() && newData.val().length === 19"
+            },
+            "$other": {
+              ".validate": false
+            }
           }
         }
+      }
+    },
+    "chatStaffReadCursors": {
+      ".read": "auth != null && (auth.token.role === 'STAFF' || auth.token.role === 'ADMIN')",
+      "$customerId": {
+        ".write": "auth != null && (auth.token.role === 'STAFF' || auth.token.role === 'ADMIN') && newData.exists()",
+        ".validate": "newData.isString() && newData.val().length <= 120 && (!data.exists() || newData.val() >= data.val()) && (root.child('chats').child($customerId).child('messages').child(newData.val()).child('senderId').val() === $customerId || root.child('chats').child($customerId).child('messages').child(newData.val()).child('nguoiGuiId').val() === $customerId)"
       }
     }
   }

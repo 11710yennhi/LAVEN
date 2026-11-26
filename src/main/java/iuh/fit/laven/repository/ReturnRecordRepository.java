@@ -31,4 +31,6 @@ public interface ReturnRecordRepository extends JpaRepository<ReturnRecord,Strin
             @Param("excludedReason") ReturnReason excludedReason,
             @Param("deadline") LocalDateTime deadline
     );
+
+    long countByStatus(ReturnStatus status);
 }
