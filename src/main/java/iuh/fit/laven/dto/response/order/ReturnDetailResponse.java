@@ -26,6 +26,7 @@ public class ReturnDetailResponse {
     private PaymentMethod paymentMethod;
     private PaymentStatus paymentStatus;
     private Integer totalAmount;
+    private String receiverName;
 
     private ReturnType returnType;
     private ReturnReason returnReason;

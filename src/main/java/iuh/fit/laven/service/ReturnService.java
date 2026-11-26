@@ -9,6 +9,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -157,6 +162,35 @@ public class ReturnService {
         ReturnRecord record = returnRecordRepository.findById(orderId)
                 .filter(r -> r.getReturnType() == ReturnType.CUSTOMER_RETURN)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Đơn hàng chưa có yêu cầu trả hàng"));
+        return toResponse(record);
+    }
+
+    // =====================================================================
+    // Staff xem danh sách và chi tiết phiếu trả hàng / giao thất bại
+    // =====================================================================
+    @Transactional(readOnly = true)
+    public Page<ReturnDetailResponse> getStaffReturns(ReturnStatus status, ReturnType type, int page, int size) {
+        if (page < 0) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Số trang không hợp lệ");
+        }
+        if (size <= 0 || size > 100) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Kích thước trang phải từ 1 đến 100");
+        }
+        Specification<ReturnRecord> spec = (root, query, cb) -> cb.conjunction();
+        if (status != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), status));
+        }
+        if (type != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("returnType"), type));
+        }
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return returnRecordRepository.findAll(spec, pageable).map(this::toResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public ReturnDetailResponse getStaffReturn(String orderId) {
+        ReturnRecord record = returnRecordRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Không tìm thấy phiếu trả hàng"));
         return toResponse(record);
     }
 
@@ -502,6 +536,7 @@ public class ReturnService {
                 .paymentMethod(order.getPaymentMethod())
                 .paymentStatus(order.getPaymentStatus())
                 .totalAmount(order.getTotalAmount())
+                .receiverName(order.getReceiverName())
                 .returnType(record.getReturnType())
                 .returnReason(record.getReturnReason())
                 .status(record.getStatus())

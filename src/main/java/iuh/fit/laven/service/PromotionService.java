@@ -221,7 +221,8 @@ public class PromotionService {
                 t.getDiscountType(), discountValue, 0, maxDiscountValue,
                 today, today.plusMonths(1),          // hiệu lực 1 tháng
                 true, customer, 1);                  // chỉ khách này, dùng 1 lần
-        promotionRepository.save(p);
+        // Id tự gán nên save() chạy merge() và trả về bản được quản lý; phải dùng bản này để Cancellation tham chiếu
+        p = promotionRepository.save(p);
 
         emailService.sendCompensationEmail(customer.getEmail(), p.getCode(), p.getEndDate());
         return p;

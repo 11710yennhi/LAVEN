@@ -8,6 +8,7 @@ import iuh.fit.laven.dto.response.order.*;
 import iuh.fit.laven.exception.AppException;
 import iuh.fit.laven.model.*;
 import iuh.fit.laven.model.enums.*;
+import iuh.fit.laven.model.id.OrderDetailId;
 import iuh.fit.laven.model.id.ReturnItemId;
 import iuh.fit.laven.repository.*;
 import iuh.fit.laven.util.IdGenerator;
@@ -392,6 +393,8 @@ public class OrderService {
         List<CreateOrderResponse.Item> responseItems = new ArrayList<>();
         for (PricedItem priced : pricedItems) {
             OrderDetail detail = new OrderDetail();
+            // Khóa ghép @MapsId cần có sẵn đối tượng id để Hibernate ghi orderId/variantId/colorId vào
+            detail.setId(new OrderDetailId(orderId, priced.variant().getVariantId(), priced.color().getColorId()));
             detail.setOrder(order);
             detail.setVariant(priced.variant());
             detail.setColor(priced.color());
@@ -703,7 +706,9 @@ public class OrderService {
         return CustomerOrderDetailResponse.CancellationResponse.builder()
                 .reason(cancellation.getReason())
                 .cancelledAt(cancellation.getCancelledAt())
-                .compensationPromotionCode(cancellation.getCompensationPromotion().getCode())
+                // Khách tự hủy thì không có mã bồi thường
+                .compensationPromotionCode(cancellation.getCompensationPromotion() == null ? null
+                        : cancellation.getCompensationPromotion().getCode())
                 .build();
     }
 
