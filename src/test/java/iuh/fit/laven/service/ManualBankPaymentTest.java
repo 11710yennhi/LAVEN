@@ -36,7 +36,7 @@ class ManualBankPaymentTest {
     }
 
     @Test
-    void staffConfirmationStoresBankRecordAndConfirmsOrder() {
+    void staffConfirmationStoresBankRecordAndLeavesOrderPending() {
         Order order = pendingOrder();
         User staff = mock(User.class);
         when(staff.getRole()).thenReturn(UserRole.STAFF);
@@ -46,8 +46,9 @@ class ManualBankPaymentTest {
         service.confirm(ORDER_ID, "USR2026112200000001", validRequest());
 
         assertEquals(PaymentStatus.PAID, order.getPaymentStatus());
-        assertEquals(OrderStatus.CONFIRMED, order.getOrderStatus());
-        assertSame(staff, order.getConfirmedBy());
+        assertEquals(OrderStatus.PENDING, order.getOrderStatus());
+        assertNull(order.getConfirmedBy());
+        assertNull(order.getConfirmedAt());
         assertNotNull(order.getPaidAt());
         verify(transactions).save(argThat(tx -> tx.getTransactionId().equals("MANUAL:FT123")
                 && tx.getOrder() == order));

@@ -67,9 +67,6 @@ public class ManualBankPaymentService {
                 request.getTransactionDate(), now));
         order.setPaymentStatus(PaymentStatus.PAID);
         order.setPaidAt(now);
-        order.setOrderStatus(OrderStatus.CONFIRMED);
-        order.setConfirmedAt(now);
-        order.setConfirmedBy(staff);
         return StaffOrderPaymentResponse.builder()
                 .orderId(orderId)
                 .paymentMethod(PaymentMethod.BANK_TRANSFER)
