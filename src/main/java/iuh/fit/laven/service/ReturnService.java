@@ -21,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import iuh.fit.laven.dto.request.order.ReceiveReturnRequest;
 import iuh.fit.laven.dto.request.order.ReturnRequest;
+import iuh.fit.laven.dto.request.order.StaffReturnFilterRequest;
 import iuh.fit.laven.dto.response.order.ReturnDetailResponse;
 import iuh.fit.laven.exception.AppException;
 import iuh.fit.laven.model.ColorStock;
@@ -169,20 +170,47 @@ public class ReturnService {
     // Staff xem danh sách và chi tiết phiếu trả hàng / giao thất bại
     // =====================================================================
     @Transactional(readOnly = true)
-    public Page<ReturnDetailResponse> getStaffReturns(ReturnStatus status, ReturnType type, int page, int size) {
-        if (page < 0) {
-            throw new AppException(HttpStatus.BAD_REQUEST, "Số trang không hợp lệ");
-        }
-        if (size <= 0 || size > 100) {
-            throw new AppException(HttpStatus.BAD_REQUEST, "Kích thước trang phải từ 1 đến 100");
-        }
+    public Page<ReturnDetailResponse> getStaffReturns(StaffReturnFilterRequest filter) {
+        validateStaffReturnFilter(filter);
         Specification<ReturnRecord> spec = (root, query, cb) -> cb.conjunction();
-        if (status != null) {
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), status));
+        if (filter.getStatus() != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), filter.getStatus()));
         }
-        if (type != null) {
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("returnType"), type));
+        if (filter.getReturnType() != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("returnType"), filter.getReturnType()));
         }
+        if (filter.getReturnReason() != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("returnReason"), filter.getReturnReason()));
+        }
+        if (filter.getOrderId() != null && !filter.getOrderId().isBlank()) {
+            String keyword = filter.getOrderId().trim().toLowerCase();
+            spec = spec.and((root, query, cb) ->
+                    cb.like(cb.lower(root.get("orderId")), "%" + keyword + "%"));
+        }
+        if (filter.getCustomerName() != null && !filter.getCustomerName().isBlank()) {
+            String keyword = "%" + filter.getCustomerName().trim().toLowerCase() + "%";
+            spec = spec.and((root, query, cb) -> cb.or(
+                    cb.like(cb.lower(root.get("order").get("customer").get("fullName")), keyword),
+                    cb.like(cb.lower(root.get("order").get("receiverName")), keyword)));
+        }
+        if (filter.getCreatedFrom() != null) {
+            spec = spec.and((root, query, cb) ->
+                    cb.greaterThanOrEqualTo(root.get("createdAt"), filter.getCreatedFrom()));
+        }
+        if (filter.getCreatedTo() != null) {
+            spec = spec.and((root, query, cb) ->
+                    cb.lessThanOrEqualTo(root.get("createdAt"), filter.getCreatedTo()));
+        }
+        if (filter.getMinRefundAmount() != null) {
+            spec = spec.and((root, query, cb) ->
+                    cb.greaterThanOrEqualTo(root.get("refundAmount"), filter.getMinRefundAmount()));
+        }
+        if (filter.getMaxRefundAmount() != null) {
+            spec = spec.and((root, query, cb) ->
+                    cb.lessThanOrEqualTo(root.get("refundAmount"), filter.getMaxRefundAmount()));
+        }
+        int page = filter.getPage() == null ? 0 : filter.getPage();
+        int size = filter.getSize() == null ? 10 : filter.getSize();
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         return returnRecordRepository.findAll(spec, pageable).map(this::toResponse);
     }
@@ -479,6 +507,27 @@ public class ReturnService {
             }
         }
         return result;
+    }
+
+    private void validateStaffReturnFilter(StaffReturnFilterRequest filter) {
+        if (filter.getCreatedFrom() != null && filter.getCreatedTo() != null
+                && filter.getCreatedFrom().isAfter(filter.getCreatedTo())) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Ngày bắt đầu không được lớn hơn ngày kết thúc");
+        }
+        if ((filter.getMinRefundAmount() != null && filter.getMinRefundAmount() < 0)
+                || (filter.getMaxRefundAmount() != null && filter.getMaxRefundAmount() < 0)) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Số tiền hoàn không hợp lệ");
+        }
+        if (filter.getMinRefundAmount() != null && filter.getMaxRefundAmount() != null
+                && filter.getMinRefundAmount() > filter.getMaxRefundAmount()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Số tiền hoàn tối thiểu không được lớn hơn tối đa");
+        }
+        if (filter.getPage() != null && filter.getPage() < 0) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Số trang không hợp lệ");
+        }
+        if (filter.getSize() != null && (filter.getSize() <= 0 || filter.getSize() > 100)) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Kích thước trang phải từ 1 đến 100");
+        }
     }
 
     private String itemKey(String variantId, String colorId) {

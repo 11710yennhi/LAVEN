@@ -7,6 +7,7 @@ import lombok.*;
 import org.springframework.format.annotation.DateTimeFormat;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -25,6 +26,8 @@ public class StaffOrderFilterRequest {
     private LocalDateTime createdTo;
     private Integer minTotalAmount;
     private Integer maxTotalAmount;
+    /** Đơn chứa ít nhất một trong các sản phẩm này (OR). Gửi productIds=A&productIds=B hoặc productIds=A,B */
+    private List<String> productIds;
     @Builder.Default
     private Integer page = 0;
     @Builder.Default
