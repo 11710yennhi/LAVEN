@@ -1,5 +1,6 @@
 package iuh.fit.laven.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import iuh.fit.laven.dto.response.SalePriceRange;
 import iuh.fit.laven.model.Category;
 import iuh.fit.laven.model.Product;
@@ -137,9 +138,8 @@ public class ProductService {
         }
         validate(product);
         product.setCategory(findActiveCategory(product));
+        normalizeSellingReason(product);
         product.setProductId(nextProductId());
-        product.setStatus(true);
-        product.setStopSellingReason(null);
         return productRepository.save(product);
     }
 
@@ -160,6 +160,65 @@ public class ProductService {
         return productRepository.save(product);
     }
 
+    @Transactional
+    public Product patch(String id, Map<String, JsonNode> changes) {
+        Product product = productRepository.findByProductIdForUpdate(id)
+            .orElseThrow(() -> notFound("Sản phẩm"));
+        for (var change : changes.entrySet()) {
+            JsonNode value = change.getValue();
+            switch (change.getKey()) {
+                case "productName" -> product.setProductName(patchText(value, "Tên sản phẩm", 200, true));
+                case "brand" -> product.setBrand(patchText(value, "Thương hiệu", 100, true));
+                case "origin" -> product.setOrigin(patchText(value, "Xuất xứ", 100, true));
+                case "material" -> product.setMaterial(patchText(value, "Chất liệu", 150, true));
+                case "description" -> product.setDescription(patchText(value, "Mô tả", 2000, false));
+                case "waterResistance" -> product.setWaterResistance(patchText(value, "Chống nước", 100, false));
+                case "wheel" -> product.setWheel(patchText(value, "Bánh xe", 100, false));
+                case "zipper" -> product.setZipper(patchText(value, "Khóa kéo", 100, false));
+                case "warranty" -> product.setWarranty(patchText(value, "Bảo hành", 100, false));
+                case "categoryId" -> product.setCategory(requireActiveCategory(patchText(value, "Danh mục", 6, true)));
+                case "maxQuantityPerOrder" -> {
+                    if (value == null || !value.isIntegralNumber() || !value.canConvertToInt() || value.intValue() < 1) {
+                        throw badProductRequest("Giới hạn mua phải là số nguyên dương");
+                    }
+                    product.setMaxQuantityPerOrder(value.intValue());
+                }
+                case "status" -> {
+                    if (value == null || !value.isBoolean()) throw badProductRequest("Trạng thái phải là true hoặc false");
+                    product.setStatus(value.booleanValue());
+                }
+                case "stopSellingReason" -> product.setStopSellingReason(patchText(value, "Lý do ngừng bán", 500, false));
+                default -> throw badProductRequest("Trường không hỗ trợ cập nhật: " + change.getKey());
+            }
+        }
+        if (changes.containsKey("status") || changes.containsKey("stopSellingReason")) {
+            if (product.isStatus()) findActiveCategory(product);
+            normalizeSellingReason(product);
+        }
+        return product;
+    }
+
+    private String patchText(JsonNode value, String label, int max, boolean required) {
+        boolean empty = value == null || value.isNull();
+        if (!empty && !value.isTextual()) throw badProductRequest(label + " phải là văn bản");
+        String text = empty ? null : blank(value.textValue());
+        if (required && text == null) throw badProductRequest(label + " không được rỗng");
+        if (text != null && text.length() > max) throw badProductRequest(label + " vượt quá " + max + " ký tự");
+        return text;
+    }
+
+    private void normalizeSellingReason(Product product) {
+        String reason = blank(product.getStopSellingReason());
+        if (!product.isStatus() && (reason == null || reason.length() > 500)) {
+            throw badProductRequest("Lý do ngừng bán phải có từ 1 đến 500 ký tự");
+        }
+        product.setStopSellingReason(product.isStatus() ? null : reason);
+    }
+
+    private ResponseStatusException badProductRequest(String message) {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+    }
+
     public Product deactivate(String id, String reason) {
         Product product = findById(id, true);
         product.setStatus(false);
@@ -172,7 +231,11 @@ public class ProductService {
         if (product.getCategory() == null || product.getCategory().getCategoryId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Danh mục sản phẩm không được rỗng");
         }
-        Category category = categoryRepository.findById(product.getCategory().getCategoryId())
+        return requireActiveCategory(product.getCategory().getCategoryId());
+    }
+
+    private Category requireActiveCategory(String categoryId) {
+        Category category = categoryRepository.findById(categoryId)
             .orElseThrow(() -> notFound("Danh mục"));
         if (!category.isStatus()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Danh mục đã ngừng kinh doanh");

@@ -76,7 +76,7 @@ public class CategoryService {
         return categoryRepository.save(category);
     }
 
-    public Category update(String id, Category request) {
+    public Category update(String id, Category request, Boolean status) {
         Category category = findById(id, true);
         if (!category.getCategoryName().equalsIgnoreCase(request.getCategoryName())
             && categoryRepository.existsByCategoryNameIgnoreCaseAndCategoryIdNot(
@@ -90,6 +90,7 @@ public class CategoryService {
             category.setImageUrl(iuh.fit.laven.util.ValidationUtil.optionalImageUrl(request.getImageUrl()));
         }
         category.setPackagingCost(request.getPackagingCost());
+        if (status != null) category.setStatus(status);
         return categoryRepository.save(category);
     }
 

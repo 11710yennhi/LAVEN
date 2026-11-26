@@ -131,7 +131,9 @@ public class ColorStockService {
             .orElseThrow(() -> notFound("Biến thể"));
         Color color = colorRepository.findById(colorId)
             .orElseThrow(() -> notFound("Màu sắc"));
-        requireProduct(variant.getProduct().getProductId(), false);
+        if (!variant.getProduct().getCategory().isStatus()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Danh mục đã ngừng kinh doanh");
+        }
 
         ColorStock stock = new ColorStock();
         stock.setId(id);
