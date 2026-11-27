@@ -2,6 +2,7 @@ package iuh.fit.laven.repository;
 
 import iuh.fit.laven.dto.response.CategoryProductPage;
 import iuh.fit.laven.model.Product;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import jakarta.persistence.LockModeType;
@@ -47,6 +48,32 @@ public interface ProductRepository extends JpaRepository<Product, String> {
         @Param("material") String material,
         @Param("status") Boolean status,
         @Param("includeInactive") boolean includeInactive
+    );
+
+    @Query("""
+        SELECT p FROM Product p
+        WHERE (:keyword IS NULL OR LOWER(CONCAT(p.brand, ' ', p.productName)) LIKE :keyword ESCAPE '!'
+               OR LOWER(p.productId) LIKE :keyword ESCAPE '!')
+          AND (:categoryId IS NULL OR p.category.categoryId = :categoryId)
+          AND (:status IS NULL OR p.status = :status)
+          AND (:prefix IS NULL OR p.productId LIKE :prefix ESCAPE '!')
+          AND (:comingSoon IS NULL
+               OR (:comingSoon = true AND p.status = true AND NOT EXISTS (
+                   SELECT 1 FROM ColorStock s WHERE s.variant.product = p
+               ))
+               OR (:comingSoon = false AND (p.status = false OR EXISTS (
+                   SELECT 1 FROM ColorStock s WHERE s.variant.product = p
+               ))))
+          AND (:lowStock = false OR (p.status = true AND p.category.status = true AND EXISTS (
+              SELECT 1 FROM ColorStock s WHERE s.variant.product = p AND s.stock <= :threshold
+          )))
+        ORDER BY p.productId DESC
+        """)
+    Page<Product> searchStaffPage(
+        @Param("keyword") String keyword, @Param("categoryId") String categoryId,
+        @Param("status") Boolean status, @Param("prefix") String prefix,
+        @Param("comingSoon") Boolean comingSoon, @Param("lowStock") boolean lowStock,
+        @Param("threshold") int threshold, Pageable pageable
     );
 
     @Query("""

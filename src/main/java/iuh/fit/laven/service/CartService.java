@@ -39,6 +39,7 @@ public class CartService {
     private final UserRepository userRepository;
     private final PromotionService promotionService;
     private final UserEventService events;
+    private final ProductImageService productImageService;
 
     // =====================================================================
     // UC08: giỏ hàng của Customer (lưu DB)
@@ -142,19 +143,26 @@ public class CartService {
     @Transactional(readOnly = true)
     public CartResponse preview(List<CartItemRequest> items) {
         List<ScopedPromotion> promotions = promotionService.loadActiveProductPromotions();
-        List<CartItemResponse> responses = new ArrayList<>();
+        record PreviewEntry(String variantId, String colorId, int quantity, ColorStock stock) {}
+        List<PreviewEntry> entries = new ArrayList<>();
         if (items != null) {
             for (CartItemRequest r : items) {
                 if (r == null || r.getVariantId() == null || r.getColorId() == null) {
                     continue;
                 }
+                String variantId = r.getVariantId().trim();
+                String colorId = normalizeColorId(r.getColorId());
                 int quantity = r.getQuantity() == null ? 0 : r.getQuantity();
                 ColorStock stock = colorStockRepository
-                        .findById(new ColorStockId(r.getVariantId().trim(), normalizeColorId(r.getColorId())))
+                        .findById(new ColorStockId(variantId, colorId))
                         .orElse(null);
-                responses.add(buildItem(r.getVariantId().trim(), normalizeColorId(r.getColorId()), quantity, stock, promotions));
+                entries.add(new PreviewEntry(variantId, colorId, quantity, stock));
             }
         }
+        Map<String, String> covers = loadFallbackCovers(entries.stream().map(PreviewEntry::stock).toList());
+        List<CartItemResponse> responses = entries.stream()
+                .map(e -> buildItem(e.variantId(), e.colorId(), e.quantity(), e.stock(), promotions, covers))
+                .toList();
         return toCartResponse(responses);
     }
 
@@ -172,12 +180,20 @@ public class CartService {
 
     private CartResponse buildCart(Cart cart) {
         List<ScopedPromotion> promotions = promotionService.loadActiveProductPromotions();
-        List<CartItemResponse> responses = new ArrayList<>();
-        for (CartItem item : cartItemRepository.findByCart_CartId(cart.getCartId())) {
+        List<CartItem> cartItems = cartItemRepository.findByCart_CartId(cart.getCartId());
+        List<ColorStock> stocks = new ArrayList<>(cartItems.size());
+        for (CartItem item : cartItems) {
+            stocks.add(colorStockRepository.findById(new ColorStockId(item.getId().getVariantId(), item.getId().getColorId())).orElse(null));
+        }
+        Map<String, String> covers = loadFallbackCovers(stocks);
+
+        List<CartItemResponse> responses = new ArrayList<>(cartItems.size());
+        for (int i = 0; i < cartItems.size(); i++) {
+            CartItem item = cartItems.get(i);
             String variantId = item.getId().getVariantId();
             String colorId = item.getId().getColorId();
-            ColorStock stock = colorStockRepository.findById(new ColorStockId(variantId, colorId)).orElse(null);
-            CartItemResponse response = buildItem(variantId, colorId, item.getQuantity(), stock, promotions);
+            ColorStock stock = stocks.get(i);
+            CartItemResponse response = buildItem(variantId, colorId, item.getQuantity(), stock, promotions, covers);
             // Số lượng bị cắt về mức cho phép thì ghi lại vào giỏ
             if (response.getQuantity() > 0 && response.getQuantity() != item.getQuantity()) {
                 item.setQuantity(response.getQuantity());
@@ -188,8 +204,18 @@ public class CartService {
         return toCartResponse(responses);
     }
 
+    private Map<String, String> loadFallbackCovers(List<ColorStock> stocks) {
+        List<String> productIds = stocks.stream()
+                .filter(s -> s != null && (s.getImageUrl() == null || s.getImageUrl().isBlank()))
+                .map(s -> s.getVariant().getProduct().getProductId())
+                .distinct()
+                .toList();
+        return productIds.isEmpty() ? Map.of() : productImageService.findCoverUrls(productIds);
+    }
+
     private CartItemResponse buildItem(String variantId, String colorId, int quantity,
-                                       ColorStock stock, List<ScopedPromotion> promotions) {
+                                       ColorStock stock, List<ScopedPromotion> promotions,
+                                       Map<String, String> covers) {
         if (stock == null) {
             return CartItemResponse.builder()
                     .variantId(variantId).colorId(colorId).quantity(quantity)
@@ -220,12 +246,19 @@ public class CartService {
             }
         }
 
+        String imageUrl = stock.getImageUrl();
+        if (imageUrl == null || imageUrl.isBlank()) {
+            imageUrl = covers.get(product.getProductId());
+        }
+
         return CartItemResponse.builder()
                 .variantId(variantId)
                 .colorId(colorId)
                 .colorName(stock.getColor().getName())
                 .productId(product.getProductId())
                 .productName(product.getProductName())
+                .categoryName(product.getCategory().getCategoryName())
+                .imageUrl(imageUrl)
                 .size(stock.getVariant().getSize())
                 .quantity(effectiveQuantity)
                 .originalPrice(salePrice)

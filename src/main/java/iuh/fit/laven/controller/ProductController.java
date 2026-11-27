@@ -3,6 +3,7 @@ package iuh.fit.laven.controller;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.http.MediaType;
 import iuh.fit.laven.dto.response.ProductResponse;
+import iuh.fit.laven.dto.response.StaffProductPage;
 import iuh.fit.laven.dto.response.StaffProductResponse;
 import iuh.fit.laven.model.Product;
 import iuh.fit.laven.model.UserEvent.Type;
@@ -71,7 +72,8 @@ public class ProductController {
         }).toList();
     }
 
-    public record FeaturedProduct(ProductResponse product, String size, long score, long soldCount) {}
+    public record FeaturedProduct(ProductResponse product, String size, long score, long soldCount,
+                                  long viewCount, long addToCartCount, long purchaseCount) {}
 
     @GetMapping("/public/products/featured")
     public List<FeaturedProduct> featured(@RequestParam(required = false) String categoryId) {
@@ -85,8 +87,10 @@ public class ProductController {
             var row = ranked.get(index);
             var product = products.get(index);
             var range = ranges.get(row.productId());
-            return new FeaturedProduct(new ProductResponse(product, range, covers.get(row.productId()),
-                promotions.finalProductPrice(product, range.min(), actives), List.of()), row.size(), row.score(), row.soldCount());
+            var response = new ProductResponse(product, range, covers.get(row.productId()),
+                promotions.finalProductPrice(product, range.min(), actives), List.of());
+            return new FeaturedProduct(response, row.size(), row.score(), row.soldCount(),
+                row.viewCount(), row.addToCartCount(), row.purchaseCount());
         }).toList();
     }
 
@@ -118,11 +122,32 @@ public class ProductController {
                 iuh.fit.laven.repository.ColorStockRepository.LOW_STOCK_THRESHOLD);
             products = products.stream().filter(product -> lowStockIds.contains(product.getProductId())).toList();
         }
-        var priceRanges = productService.findSalePriceRanges(products);
+        return toStaffResponses(products);
+    }
+
+    @GetMapping("/staff/products/page")
+    public StaffProductPage listProductPage(
+        @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) String categoryId,
+        @RequestParam(required = false) Boolean status,
+        @RequestParam(required = false) String productIdPrefix,
+        @RequestParam(required = false) Boolean comingSoon,
+        @RequestParam(defaultValue = "false") boolean lowStock,
+        @RequestParam(defaultValue = "0") int page
+    ) {
+        var result = productService.searchStaffPage(keyword, categoryId, status, productIdPrefix, comingSoon, lowStock, page);
+        return new StaffProductPage(toStaffResponses(result.getContent()), result.getTotalElements(),
+            result.hasNext() ? page + 1 : null);
+    }
+
+    private List<StaffProductResponse> toStaffResponses(List<Product> products) {
+        var summaries = productService.findStaffVariantSummaries(products);
         var covers = productImageService.findCoverUrls(products.stream().map(Product::getProductId).toList());
-        return products.stream()
-            .map(product -> new StaffProductResponse(product, priceRanges.get(product.getProductId()), covers.get(product.getProductId())))
-            .toList();
+        return products.stream().map(product -> {
+            var id = product.getProductId();
+            var summary = summaries.get(id);
+            return new StaffProductResponse(product, summary.priceRange(), covers.get(id), summary.comingSoon());
+        }).toList();
     }
 
     @GetMapping("/public/products/{productId}")
@@ -166,7 +191,6 @@ public class ProductController {
     }
 
     private StaffProductResponse toStaffResponse(Product product) {
-        var covers = productImageService.findCoverUrls(List.of(product.getProductId()));
-        return new StaffProductResponse(product, productService.findSalePriceRange(product), covers.get(product.getProductId()));
+        return toStaffResponses(List.of(product)).getFirst();
     }
 }

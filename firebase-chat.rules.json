@@ -4,6 +4,7 @@
       "$readerId": {
         ".read": "auth != null && auth.uid === $readerId && (auth.token.role === 'CUSTOMER' || auth.token.role === 'STAFF' || auth.token.role === 'ADMIN')",
         "$customerId": {
+          ".read": "auth != null && $readerId === $customerId && (auth.token.role === 'STAFF' || auth.token.role === 'ADMIN')",
           ".write": "auth != null && auth.uid === $readerId && newData.exists() && ((auth.token.role === 'CUSTOMER' && auth.uid === $customerId) || auth.token.role === 'STAFF' || auth.token.role === 'ADMIN')",
           ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120 && root.child('chats').child($customerId).child('messages').child(newData.val()).exists()"
         }
@@ -39,6 +40,7 @@
     "chatStaffReadCursors": {
       ".read": "auth != null && (auth.token.role === 'STAFF' || auth.token.role === 'ADMIN')",
       "$customerId": {
+        ".read": "auth != null && auth.uid === $customerId && auth.token.role === 'CUSTOMER'",
         ".write": "auth != null && (auth.token.role === 'STAFF' || auth.token.role === 'ADMIN') && newData.exists()",
         ".validate": "newData.isString() && newData.val().length <= 120 && (!data.exists() || newData.val() >= data.val()) && (root.child('chats').child($customerId).child('messages').child(newData.val()).child('senderId').val() === $customerId || root.child('chats').child($customerId).child('messages').child(newData.val()).child('nguoiGuiId').val() === $customerId)"
       }
