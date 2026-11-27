@@ -10,6 +10,7 @@ import iuh.fit.laven.dto.response.AuthResponse;
 import iuh.fit.laven.dto.response.MessageResponse;
 import iuh.fit.laven.security.CustomUserDetails;
 import iuh.fit.laven.service.AuthService;
+import iuh.fit.laven.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final UserService userService;
 
     @PostMapping("/register")
     public ResponseEntity<MessageResponse> register(@RequestBody RegisterRequest request) {
@@ -38,6 +40,13 @@ public class AuthController {
     public ResponseEntity<MessageResponse> verify(@RequestParam("token") String token) {
         authService.verifyEmail(token);
         return ResponseEntity.ok(new MessageResponse("Xác thực email thành công. Bạn có thể đăng nhập"));
+    }
+
+    /** Link trong email đổi email. Nằm dưới /api/auth/** nên không cần đăng nhập. */
+    @GetMapping("/verify-email-change")
+    public ResponseEntity<MessageResponse> verifyEmailChange(@RequestParam("token") String token) {
+        userService.confirmEmailChange(token);
+        return ResponseEntity.ok(new MessageResponse("Đổi email thành công. Từ nay bạn đăng nhập bằng email mới"));
     }
 
     @PostMapping("/login")

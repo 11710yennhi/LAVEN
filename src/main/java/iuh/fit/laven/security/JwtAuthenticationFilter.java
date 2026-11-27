@@ -43,15 +43,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = header.substring(7).trim();
             try {
                 Claims claims = jwtService.parse(token);
-                userRepository.findById(claims.getSubject()).ifPresent(user -> {
-                    if (isTokenAcceptable(user, claims)) {
-                        CustomUserDetails principal = new CustomUserDetails(user);
-                        UsernamePasswordAuthenticationToken authentication =
-                                new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
-                        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                        SecurityContextHolder.getContext().setAuthentication(authentication);
-                    }
-                });
+                // Token có claim purpose (vd token đổi email) không được dùng thay access token
+                if (claims.get(JwtService.PURPOSE_CLAIM) == null) {
+                    userRepository.findById(claims.getSubject()).ifPresent(user -> {
+                        if (isTokenAcceptable(user, claims)) {
+                            CustomUserDetails principal = new CustomUserDetails(user);
+                            UsernamePasswordAuthenticationToken authentication =
+                                    new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+                            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                            SecurityContextHolder.getContext().setAuthentication(authentication);
+                        }
+                    });
+                }
             } catch (JwtException | IllegalArgumentException ex) {
                 // Token sai chữ ký, hết hạn hoặc sai định dạng: bỏ qua, request sẽ bị 401
                 SecurityContextHolder.clearContext();

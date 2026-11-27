@@ -1,5 +1,8 @@
 package iuh.fit.laven.service;
 
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
+import iuh.fit.laven.dto.request.ChangeEmailRequest;
 import iuh.fit.laven.dto.request.CreateStaffRequest;
 import iuh.fit.laven.dto.request.LockUserRequest;
 import iuh.fit.laven.dto.request.UpdateProfileRequest;
@@ -10,6 +13,7 @@ import iuh.fit.laven.model.User;
 import iuh.fit.laven.model.enums.UserRole;
 import iuh.fit.laven.repository.RefreshTokenRepository;
 import iuh.fit.laven.repository.UserRepository;
+import iuh.fit.laven.security.JwtService;
 import iuh.fit.laven.util.IdGenerator;
 import iuh.fit.laven.util.ValidationUtil;
 import lombok.RequiredArgsConstructor;
@@ -27,10 +31,13 @@ public class UserService {
 
     public static final int AUTO_LOCK_THRESHOLD = 5;
     public static final String AUTO_LOCK_REASON = "Tự động khóa: đạt 5 đơn giao thất bại";
+    private static final String INVALID_EMAIL_CHANGE_LINK = "Link xác thực đổi email không hợp lệ hoặc đã hết hạn";
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
+    private final EmailService emailService;
 
     // ---------------- UC15: hồ sơ cá nhân ----------------
     @Transactional(readOnly = true)
@@ -50,6 +57,64 @@ public class UserService {
         user.setWard(ValidationUtil.optional(request.getWard(), 100, "Phường/xã tối đa 100 ký tự"));
         user.setCity(ValidationUtil.optional(request.getCity(), 100, "Tỉnh/thành phố tối đa 100 ký tự"));
         return UserResponse.from(userRepository.save(user));
+    }
+
+    // ---------------- UC15 mở rộng: đổi email có xác thực (mọi role) ----------------
+
+    /**
+     * Bước 1: kiểm tra rồi gửi link xác thực tới email MỚI. Chưa đổi gì trong DB.
+     * Thứ tự: định dạng -> khác email cũ -> mật khẩu hiện tại -> unique.
+     */
+    @Transactional(readOnly = true)
+    public void requestEmailChange(String userId, ChangeEmailRequest request) {
+        User user = findUser(userId);
+        String newEmail = ValidationUtil.validateEmail(request.getNewEmail());
+        if (newEmail.equals(user.getEmail())) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Email mới phải khác email hiện tại");
+        }
+        String current = request.getCurrentPassword() == null ? "" : request.getCurrentPassword();
+        if (!passwordEncoder.matches(current, user.getPasswordHash())) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Mật khẩu hiện tại không đúng");
+        }
+        if (userRepository.existsByEmail(newEmail)) {
+            throw new AppException(HttpStatus.CONFLICT, "Email đã được sử dụng");
+        }
+        String token = jwtService.generateEmailChangeToken(user, newEmail);
+        emailService.sendEmailChangeVerification(newEmail, token);
+    }
+
+    /**
+     * Bước 2: khách bấm link. Chỉ đổi khi token đúng, còn hạn, email hiện tại vẫn là email cũ
+     * trong token (link dùng 1 lần) và email mới vẫn chưa ai dùng.
+     */
+    @Transactional
+    public void confirmEmailChange(String token) {
+        if (token == null || token.isBlank()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, INVALID_EMAIL_CHANGE_LINK);
+        }
+        Claims claims;
+        try {
+            claims = jwtService.parseEmailChangeToken(token.trim());
+        } catch (JwtException | IllegalArgumentException ex) {
+            throw new AppException(HttpStatus.BAD_REQUEST, INVALID_EMAIL_CHANGE_LINK);
+        }
+        String oldEmail = claims.get(JwtService.OLD_EMAIL_CLAIM, String.class);
+        String newEmail = claims.get(JwtService.NEW_EMAIL_CLAIM, String.class);
+        User user = userRepository.findById(claims.getSubject())
+                .orElseThrow(() -> new AppException(HttpStatus.BAD_REQUEST, INVALID_EMAIL_CHANGE_LINK));
+        // Email đã đổi rồi (bấm link lần 2) hoặc đã đổi sang email khác: link cũ hết hiệu lực
+        if (oldEmail == null || newEmail == null || !oldEmail.equals(user.getEmail())) {
+            throw new AppException(HttpStatus.BAD_REQUEST, INVALID_EMAIL_CHANGE_LINK);
+        }
+        if (!user.isStatus()) {
+            throw new AppException(HttpStatus.FORBIDDEN, "Tài khoản đã bị khóa");
+        }
+        // Kiểm tra lại: trong lúc chờ có thể đã có người dùng email này
+        if (userRepository.existsByEmail(newEmail)) {
+            throw new AppException(HttpStatus.CONFLICT, "Email đã được sử dụng");
+        }
+        user.setEmail(newEmail);   // setter kiểm tra định dạng @gmail.com và chuyển chữ thường
+        userRepository.save(user);
     }
 
     // ---------------- UC32: Admin quản lý nhân viên ----------------
