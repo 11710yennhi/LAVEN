@@ -1,5 +1,6 @@
 package iuh.fit.laven.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.http.MediaType;
 import iuh.fit.laven.dto.response.ProductResponse;
 import iuh.fit.laven.dto.response.StaffProductResponse;
@@ -14,6 +15,7 @@ import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping(value = "/api", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -148,6 +150,11 @@ public class ProductController {
         @Valid @RequestBody Product product
     ) {
         return toStaffResponse(productService.update(productId, product));
+    }
+
+    @PostMapping("/staff/products/{productId}/changes")
+    public StaffProductResponse patchProduct(@PathVariable String productId, @RequestBody Map<String, JsonNode> changes) {
+        return toStaffResponse(productService.patch(productId, changes));
     }
 
     @DeleteMapping("/staff/products/{productId}")

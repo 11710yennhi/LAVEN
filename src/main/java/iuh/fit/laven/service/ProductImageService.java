@@ -42,6 +42,10 @@ public class ProductImageService {
             .toList();
     }
 
+    public void clearCover(String productId) {
+        requireProduct(productId, true).setCoverImageId(null);
+    }
+
     public void setCover(String productId, String imageId) {
         Product product = requireProduct(productId, true);
         ProductImage image = imageRepository.findById(imageId)
@@ -77,8 +81,11 @@ public class ProductImageService {
      * 2. Thêm ảnh mới (Add): Nhận URL từ React sau khi tải lên Cloudinary
      */
     public ProductImage addImage(String productId, String imageUrl) {
-        Product product = requireProduct(productId, true);
+        Product product = productRepository.findByProductIdForUpdate(productId)
+            .orElseThrow(() -> notFound("Sản phẩm"));
         String validUrl = cloudinaryService.validateImageUrl(imageUrl, productId);
+        var existing = imageRepository.findFirstByProductProductIdAndImageUrl(productId, validUrl);
+        if (existing.isPresent()) return existing.get();
 
         ProductImage image = new ProductImage();
         image.setProduct(product);

@@ -9,6 +9,7 @@ public class StaffProductResponse extends ProductResponse {
     private final Integer packagingCost;
     private final boolean status;
     private final String stopSellingReason;
+    private final String coverImageId;
 
     public StaffProductResponse(Product product, SalePriceRange priceRange) {
         this(product, priceRange, null);
@@ -19,5 +20,6 @@ public class StaffProductResponse extends ProductResponse {
         this.packagingCost = product.getCategory().getPackagingCost();
         this.status = product.isStatus();
         this.stopSellingReason = product.getStopSellingReason();
+        this.coverImageId = product.getCoverImageId();
     }
 }

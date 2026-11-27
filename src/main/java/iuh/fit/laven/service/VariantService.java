@@ -58,7 +58,11 @@ public class VariantService {
 
     public StaffVariantResponse create(String productId, Variant variant) {
         validatePrice(variant.getOriginalPrice());
-        variant.setProduct(requireProduct(productId, false));
+        Product product = requireProduct(productId, true);
+        if (!product.getCategory().isStatus()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Danh mục đã ngừng kinh doanh");
+        }
+        variant.setProduct(product);
         variant.setVariantId(nextVariantId());
         return new StaffVariantResponse(variantRepository.save(variant));
     }
