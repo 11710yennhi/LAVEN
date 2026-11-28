@@ -62,7 +62,8 @@ public class OrderService {
 
 
     @Transactional(readOnly = true)
-    public Page<OrderSummaryResponse> getCustomerOrders(String customerId, OrderStatus orderStatus, int page, int size) {
+    public Page<OrderSummaryResponse> getCustomerOrders(String customerId, OrderStatus orderStatus,
+                                                        Sort.Direction sortDirection, int page, int size) {
         if (page < 0) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Số trang không hợp lệ");
         }
@@ -75,7 +76,8 @@ public class OrderService {
             spec = spec.and((root, query, cb) ->
                     cb.equal(root.get("orderStatus"), orderStatus));
         }
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Sort.Direction direction = sortDirection == null ? Sort.Direction.DESC : sortDirection;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, "createdAt"));
         return orderRepository.findAll(spec, pageable).map(OrderSummaryResponse::from);
     }
 
@@ -144,7 +146,8 @@ public class OrderService {
         }
         int page = filter.getPage() == null ? 0 : filter.getPage();
         int size = filter.getSize() == null ? 10 : filter.getSize();
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Sort.Direction direction = filter.getSortDirection() == null ? Sort.Direction.DESC : filter.getSortDirection();
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, "createdAt"));
         return orderRepository.findAll(spec, pageable).map(StaffOrderSummaryResponse::from);
     }
 

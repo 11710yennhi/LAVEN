@@ -12,6 +12,7 @@ import iuh.fit.laven.service.OrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -32,9 +33,10 @@ public class OrderController {
     public Page<OrderSummaryResponse> getCustomerOrders(
             @AuthenticationPrincipal CustomUserDetails me,
             @RequestParam(required = false) OrderStatus orderStatus,
+            @RequestParam(defaultValue = "DESC") Sort.Direction sortDirection,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return orderService.getCustomerOrders(me.getUserId(), orderStatus, page, size);
+        return orderService.getCustomerOrders(me.getUserId(), orderStatus, sortDirection, page, size);
     }
 
     @GetMapping("/customer/orders/{id}")
