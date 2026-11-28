@@ -19,6 +19,8 @@ import iuh.fit.laven.util.IdGenerator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
@@ -224,7 +226,21 @@ public class PromotionService {
         // Id tự gán nên save() chạy merge() và trả về bản được quản lý; phải dùng bản này để Cancellation tham chiếu
         p = promotionRepository.save(p);
 
-        emailService.sendCompensationEmail(customer.getEmail(), p.getCode(), p.getEndDate());
+        // Gửi email SAU KHI commit: không giữ khóa đơn/tồn kho trong lúc chờ SMTP,
+        // và nếu transaction rollback thì khách không nhận mã không tồn tại
+        String email = customer.getEmail();
+        String code = p.getCode();
+        LocalDate endDate = p.getEndDate();
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    emailService.sendCompensationEmail(email, code, endDate);
+                }
+            });
+        } else {
+            emailService.sendCompensationEmail(email, code, endDate);
+        }
         return p;
     }
 
