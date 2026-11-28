@@ -37,12 +37,13 @@ public class DashboardSalesService {
 
     @Transactional(readOnly = true)
     public DashboardSalesResponse getSales(Period period) {
-        LocalDate to = LocalDate.now(VIETNAM);
+        LocalDate today = LocalDate.now(VIETNAM);
         LocalDate from = switch (period) {
-            case DAYS_7 -> to.minusDays(6);
-            case DAYS_30 -> to.minusDays(29);
-            case MONTH -> to.withDayOfMonth(1);
+            case DAYS_7 -> today.minusDays(6);
+            case DAYS_30 -> today.minusDays(29);
+            case MONTH -> today.withDayOfMonth(1);
         };
+        LocalDate to = period == Period.MONTH ? today.withDayOfMonth(today.lengthOfMonth()) : today;
         var start = from.atStartOfDay();
         var end = to.plusDays(1).atStartOfDay();
         var orders = entityManager.createQuery("""

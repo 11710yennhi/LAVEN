@@ -1,20 +1,16 @@
 package iuh.fit.laven.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.TextNode;
-import iuh.fit.laven.dto.request.ProductImportRequest;
-import iuh.fit.laven.dto.request.ProductImportRequest.Row;
+import iuh.fit.laven.dto.request.ProductImportValidationRequest.Row;
+import iuh.fit.laven.dto.response.ProductImportResponse.Problem;
 import iuh.fit.laven.model.Category;
 import iuh.fit.laven.model.Product;
-import iuh.fit.laven.model.ProductImportBatch;
 import iuh.fit.laven.repository.CategoryRepository;
 import iuh.fit.laven.repository.ProductRepository;
-import jakarta.persistence.EntityManager;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -22,11 +18,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 class ProductImportTest {
@@ -69,32 +62,27 @@ class ProductImportTest {
     }
 
     @Test
-    void confirmRequiresReasonAndRetryReturnsTheSameProductId() {
-        var products = mock(ProductService.class);
+    void validationReturnsAllInvalidRowsBeforeAnyProductIsCreated() {
         var categories = mock(CategoryRepository.class);
-        var entityManager = mock(EntityManager.class);
-        var stored = new AtomicReference<ProductImportBatch>();
+        when(categories.findAllById(List.of("CAT001", "CAT002")))
+            .thenReturn(List.of(new Category("CAT001", "Vali", "", 35_000, true)));
+
+        var service = new ProductImportService(categories);
+        var invalidCategoryAndQuantity = new Row(4, "Balo", "CAT002", "LAVEN", "Việt Nam", "Vải",
+            null, null, null, null, null, 0, true, null);
+        var errors = service.validateForImport(List.of(row(null), invalidCategoryAndQuantity));
+        assertEquals(List.of(2, 4, 4), errors.stream().map(Problem::line).toList());
+        assertEquals(List.of("stopSellingReason", "categoryId", "maxQuantityPerOrder"),
+            errors.stream().map(Problem::column).toList());
+    }
+
+    @Test
+    void validationAcceptsValidRows() {
+        var categories = mock(CategoryRepository.class);
         when(categories.findAllById(List.of("CAT001")))
             .thenReturn(List.of(new Category("CAT001", "Vali", "", 35_000, true)));
-        when(entityManager.find(eq(ProductImportBatch.class), any(String.class))).thenAnswer(call -> stored.get());
-        doAnswer(call -> { stored.set(call.getArgument(0)); return null; }).when(entityManager).persist(any());
-        when(products.create(any())).thenAnswer(call -> {
-            Product product = call.getArgument(0);
-            product.setProductId("PRO2026112622000001");
-            assertFalse(product.isStatus());
-            assertEquals("Chờ hàng", product.getStopSellingReason());
-            return product;
-        });
-
-        var service = new ProductImportService(products, categories, entityManager, new ObjectMapper());
-        var batchId = UUID.randomUUID();
-        assertThrows(ResponseStatusException.class, () -> service.confirm(new ProductImportRequest(batchId, List.of(row(null)))));
-        assertNull(stored.get());
-        var request = new ProductImportRequest(batchId, List.of(row("Chờ hàng")));
-        assertEquals(service.confirm(request), service.confirm(request));
-        verify(products, times(1)).create(any());
-        assertThrows(ResponseStatusException.class,
-            () -> service.confirm(new ProductImportRequest(batchId, List.of(row("Đổi lý do")))));
+        var service = new ProductImportService(categories);
+        assertTrue(service.validateForImport(List.of(row("Chờ hàng"))).isEmpty());
     }
 
     @Test

@@ -10,6 +10,8 @@ import iuh.fit.laven.repository.ColorStockRepository;
 import iuh.fit.laven.repository.ProductRepository;
 import iuh.fit.laven.repository.VariantRepository;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -39,6 +41,25 @@ public class ProductService {
         this.categoryRepository = categoryRepository;
         this.variantRepository = variantRepository;
         this.colorStockRepository = colorStockRepository;
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Product> searchStaffPage(String keyword, String categoryId, Boolean status,
+                                         String productIdPrefix, Boolean comingSoon, boolean lowStock, int page) {
+        int pageSize = 10;
+        if (page < 0 || page > Integer.MAX_VALUE / pageSize) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Số trang không hợp lệ");
+        }
+        String keywordPattern = keyword == null || keyword.isBlank() ? null
+            : "%" + escapeLike(keyword.strip().toLowerCase(java.util.Locale.ROOT)) + "%";
+        String prefixPattern = productIdPrefix == null || productIdPrefix.isBlank() ? null
+            : escapeLike(productIdPrefix.strip()) + "%";
+        return productRepository.searchStaffPage(keywordPattern, categoryId, status, prefixPattern, comingSoon, lowStock,
+            ColorStockRepository.LOW_STOCK_THRESHOLD, PageRequest.of(page, pageSize));
+    }
+
+    private static String escapeLike(String text) {
+        return text.replace("!", "!!").replace("%", "!%").replace("_", "!_");
     }
 
     @Transactional(readOnly = true)
@@ -92,16 +113,34 @@ public class ProductService {
     @Transactional(readOnly = true)
     public Map<String, SalePriceRange> findSalePriceRanges(Collection<Product> products) {
         Map<String, List<Variant>> variants = variantsByProduct(products);
+        return products.stream().collect(Collectors.toMap(Product::getProductId,
+            product -> summarizePrices(variants.getOrDefault(product.getProductId(), List.of())), (a, b) -> a));
+    }
+
+    public record StaffVariantSummary(SalePriceRange priceRange, boolean comingSoon) {}
+
+    @Transactional(readOnly = true)
+    public Map<String, StaffVariantSummary> findStaffVariantSummaries(Collection<Product> products) {
+        if (products.isEmpty()) {
+            return Map.of();
+        }
+        var productsWithColors = colorStockRepository.findProductIdsWithColors(products.stream().map(Product::getProductId).toList());
+        Map<String, SalePriceRange> priceRanges = findSalePriceRanges(products);
         return products.stream().collect(Collectors.toMap(Product::getProductId, product -> {
-            IntSummaryStatistics stats = variants.getOrDefault(product.getProductId(), List.of()).stream()
-                .map(Variant::getSalePrice)
-                .filter(Objects::nonNull)
-                .mapToInt(Integer::intValue)
-                .summaryStatistics();
-            return stats.getCount() == 0
-                ? new SalePriceRange(null, null)
-                : new SalePriceRange(stats.getMin(), stats.getMax());
+            String productId = product.getProductId();
+            return new StaffVariantSummary(priceRanges.get(productId), product.isStatus() && !productsWithColors.contains(productId));
         }, (a, b) -> a));
+    }
+
+    private SalePriceRange summarizePrices(List<Variant> variants) {
+        IntSummaryStatistics stats = variants.stream()
+            .map(Variant::getSalePrice)
+            .filter(Objects::nonNull)
+            .mapToInt(Integer::intValue)
+            .summaryStatistics();
+        return stats.getCount() == 0
+            ? new SalePriceRange(null, null)
+            : new SalePriceRange(stats.getMin(), stats.getMax());
     }
 
     @Transactional(readOnly = true)
