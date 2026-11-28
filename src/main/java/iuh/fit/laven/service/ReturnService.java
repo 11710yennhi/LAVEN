@@ -8,8 +8,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -21,6 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import iuh.fit.laven.dto.request.order.ReceiveReturnRequest;
 import iuh.fit.laven.dto.request.order.ReturnRequest;
+import iuh.fit.laven.dto.request.order.StaffReturnFilterRequest;
 import iuh.fit.laven.dto.response.order.ReturnDetailResponse;
 import iuh.fit.laven.exception.AppException;
 import iuh.fit.laven.model.ColorStock;
@@ -169,22 +172,50 @@ public class ReturnService {
     // Staff xem danh sách và chi tiết phiếu trả hàng / giao thất bại
     // =====================================================================
     @Transactional(readOnly = true)
-    public Page<ReturnDetailResponse> getStaffReturns(ReturnStatus status, ReturnType type, int page, int size) {
-        if (page < 0) {
-            throw new AppException(HttpStatus.BAD_REQUEST, "Số trang không hợp lệ");
-        }
-        if (size <= 0 || size > 100) {
-            throw new AppException(HttpStatus.BAD_REQUEST, "Kích thước trang phải từ 1 đến 100");
-        }
+    public Page<ReturnDetailResponse> getStaffReturns(StaffReturnFilterRequest filter) {
+        validateStaffReturnFilter(filter);
         Specification<ReturnRecord> spec = (root, query, cb) -> cb.conjunction();
-        if (status != null) {
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), status));
+        if (filter.getStatus() != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), filter.getStatus()));
         }
-        if (type != null) {
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("returnType"), type));
+        if (filter.getReturnType() != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("returnType"), filter.getReturnType()));
         }
+        if (filter.getReturnReason() != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("returnReason"), filter.getReturnReason()));
+        }
+        if (filter.getOrderId() != null && !filter.getOrderId().isBlank()) {
+            String keyword = filter.getOrderId().trim().toLowerCase();
+            spec = spec.and((root, query, cb) ->
+                    cb.like(cb.lower(root.get("orderId")), "%" + keyword + "%"));
+        }
+        if (filter.getCustomerName() != null && !filter.getCustomerName().isBlank()) {
+            String keyword = "%" + filter.getCustomerName().trim().toLowerCase() + "%";
+            spec = spec.and((root, query, cb) -> cb.or(
+                    cb.like(cb.lower(root.get("order").get("customer").get("fullName")), keyword),
+                    cb.like(cb.lower(root.get("order").get("receiverName")), keyword)));
+        }
+        if (filter.getCreatedFrom() != null) {
+            spec = spec.and((root, query, cb) ->
+                    cb.greaterThanOrEqualTo(root.get("createdAt"), filter.getCreatedFrom()));
+        }
+        if (filter.getCreatedTo() != null) {
+            spec = spec.and((root, query, cb) ->
+                    cb.lessThanOrEqualTo(root.get("createdAt"), filter.getCreatedTo()));
+        }
+        if (filter.getMinRefundAmount() != null) {
+            spec = spec.and((root, query, cb) ->
+                    cb.greaterThanOrEqualTo(root.get("refundAmount"), filter.getMinRefundAmount()));
+        }
+        if (filter.getMaxRefundAmount() != null) {
+            spec = spec.and((root, query, cb) ->
+                    cb.lessThanOrEqualTo(root.get("refundAmount"), filter.getMaxRefundAmount()));
+        }
+        int page = filter.getPage() == null ? 0 : filter.getPage();
+        int size = filter.getSize() == null ? 10 : filter.getSize();
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return returnRecordRepository.findAll(spec, pageable).map(this::toResponse);
+        Page<ReturnRecord> records = returnRecordRepository.findAll(spec, pageable);
+        return new PageImpl<>(toResponses(records.getContent()), pageable, records.getTotalElements());
     }
 
     @Transactional(readOnly = true)
@@ -481,6 +512,27 @@ public class ReturnService {
         return result;
     }
 
+    private void validateStaffReturnFilter(StaffReturnFilterRequest filter) {
+        if (filter.getCreatedFrom() != null && filter.getCreatedTo() != null
+                && filter.getCreatedFrom().isAfter(filter.getCreatedTo())) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Ngày bắt đầu không được lớn hơn ngày kết thúc");
+        }
+        if ((filter.getMinRefundAmount() != null && filter.getMinRefundAmount() < 0)
+                || (filter.getMaxRefundAmount() != null && filter.getMaxRefundAmount() < 0)) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Số tiền hoàn không hợp lệ");
+        }
+        if (filter.getMinRefundAmount() != null && filter.getMaxRefundAmount() != null
+                && filter.getMinRefundAmount() > filter.getMaxRefundAmount()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Số tiền hoàn tối thiểu không được lớn hơn tối đa");
+        }
+        if (filter.getPage() != null && filter.getPage() < 0) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Số trang không hợp lệ");
+        }
+        if (filter.getSize() != null && (filter.getSize() <= 0 || filter.getSize() > 100)) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Kích thước trang phải từ 1 đến 100");
+        }
+    }
+
     private String itemKey(String variantId, String colorId) {
         return variantId + "_" + normalizeColorId(colorId);
     }
@@ -491,12 +543,42 @@ public class ReturnService {
     }
 
     private ReturnDetailResponse toResponse(ReturnRecord record) {
+        return toResponses(List.of(record)).get(0);
+    }
+
+    /** Map nhiều phiếu: chi tiết đơn, món trả, bằng chứng của cả nhóm tải bằng 3 truy vấn IN (tránh N+1). */
+    private List<ReturnDetailResponse> toResponses(List<ReturnRecord> records) {
+        if (records.isEmpty()) {
+            return List.of();
+        }
+        List<String> orderIds = records.stream().map(ReturnRecord::getOrderId).toList();
+        Map<String, List<OrderDetail>> detailsByOrder = orderDetailRepository.findAllById_OrderIdIn(orderIds).stream()
+                .collect(Collectors.groupingBy(d -> d.getId().getOrderId()));
+        Map<String, List<ReturnItem>> itemsByOrder = returnItemRepository.findAllWithProductByOrderIds(orderIds).stream()
+                .collect(Collectors.groupingBy(i -> i.getId().getOrderId()));
+        Map<String, List<String>> evidenceByOrder = returnEvidenceRepository
+                .findAllByOrder_OrderIdInOrderByReturnEvidenceIdAsc(orderIds).stream()
+                .collect(Collectors.groupingBy(e -> e.getOrder().getOrderId(),
+                        Collectors.mapping(ReturnEvidence::getMediaUrl, Collectors.toList())));
+
+        List<ReturnDetailResponse> result = new ArrayList<>();
+        for (ReturnRecord record : records) {
+            String orderId = record.getOrderId();
+            result.add(toResponse(record,
+                    detailsByOrder.getOrDefault(orderId, List.of()),
+                    itemsByOrder.getOrDefault(orderId, List.of()),
+                    evidenceByOrder.getOrDefault(orderId, List.of())));
+        }
+        return result;
+    }
+
+    private ReturnDetailResponse toResponse(ReturnRecord record, List<OrderDetail> orderDetails,
+                                            List<ReturnItem> returnItems, List<String> evidenceUrls) {
         Order order = record.getOrder();
         String orderId = order.getOrderId();
-        List<OrderDetail> orderDetails = orderDetailRepository.findAllById_OrderId(orderId);
 
         List<ReturnDetailResponse.Item> items = new ArrayList<>();
-        for (ReturnItem item : returnItemRepository.findAllById_OrderId(orderId)) {
+        for (ReturnItem item : returnItems) {
             Integer unitPrice = orderDetails.stream()
                     .filter(d -> d.getVariant().getVariantId().equals(item.getVariant().getVariantId())
                             && d.getColor().getColorId().equals(item.getColor().getColorId()))
@@ -518,11 +600,6 @@ public class ReturnService {
                     .receivedColorId(item.getReceivedColor() == null ? null : item.getReceivedColor().getColorId())
                     .build());
         }
-
-        List<String> evidenceUrls = returnEvidenceRepository
-                .findAllByOrder_OrderIdOrderByReturnEvidenceIdAsc(orderId).stream()
-                .map(ReturnEvidence::getMediaUrl)
-                .toList();
 
         LocalDateTime sendBackDeadline = record.getStatus() == ReturnStatus.APPROVED
                 && record.getReturnReason() != ReturnReason.NOT_RECEIVED

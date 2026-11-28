@@ -12,11 +12,13 @@ import iuh.fit.laven.service.OrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
@@ -31,9 +33,10 @@ public class OrderController {
     public Page<OrderSummaryResponse> getCustomerOrders(
             @AuthenticationPrincipal CustomUserDetails me,
             @RequestParam(required = false) OrderStatus orderStatus,
+            @RequestParam(defaultValue = "DESC") Sort.Direction sortDirection,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return orderService.getCustomerOrders(me.getUserId(), orderStatus, page, size);
+        return orderService.getCustomerOrders(me.getUserId(), orderStatus, sortDirection, page, size);
     }
 
     @GetMapping("/customer/orders/{id}")
@@ -95,6 +98,13 @@ public class OrderController {
             @RequestParam(required = false) String trackingCode,
             @AuthenticationPrincipal CustomUserDetails me) {
         orderService.updateOrderStatus(id, status, trackingCode, me.getUserId());
+    }
+
+    /** Hủy nhiều đơn: ?orderIds=A&orderIds=B&reason=..., trả về { mã đơn: mã bồi thường } */
+    @PutMapping("/staff/orders/bulk-cancel")
+    public Map<String, String> cancelStaffOrders(@RequestParam List<String> orderIds, @RequestParam String reason,
+            @AuthenticationPrincipal CustomUserDetails me) {
+        return orderService.cancelStaffOrders(me.getUserId(), orderIds, reason);
     }
 
     @PutMapping("/staff/orders/{id}/cancel")

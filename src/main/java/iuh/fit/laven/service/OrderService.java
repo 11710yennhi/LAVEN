@@ -13,6 +13,8 @@ import iuh.fit.laven.model.id.ReturnItemId;
 import iuh.fit.laven.repository.*;
 import iuh.fit.laven.util.IdGenerator;
 import lombok.RequiredArgsConstructor;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -60,7 +62,8 @@ public class OrderService {
 
 
     @Transactional(readOnly = true)
-    public Page<OrderSummaryResponse> getCustomerOrders(String customerId, OrderStatus orderStatus, int page, int size) {
+    public Page<OrderSummaryResponse> getCustomerOrders(String customerId, OrderStatus orderStatus,
+                                                        Sort.Direction sortDirection, int page, int size) {
         if (page < 0) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Số trang không hợp lệ");
         }
@@ -73,7 +76,8 @@ public class OrderService {
             spec = spec.and((root, query, cb) ->
                     cb.equal(root.get("orderStatus"), orderStatus));
         }
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Sort.Direction direction = sortDirection == null ? Sort.Direction.DESC : sortDirection;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, "createdAt"));
         return orderRepository.findAll(spec, pageable).map(OrderSummaryResponse::from);
     }
 
@@ -128,9 +132,22 @@ public class OrderService {
             spec = spec.and((root, query, cb) ->
                     cb.lessThanOrEqualTo(root.get("totalAmount"), filter.getMaxTotalAmount()));
         }
+        if (!filter.getProductIds().isEmpty()) {
+            // EXISTS (chi tiết đơn có sản phẩm thuộc danh sách): các sản phẩm nối với nhau bằng OR
+            List<String> productIds = filter.getProductIds();
+            spec = spec.and((root, query, cb) -> {
+                Subquery<String> sub = query.subquery(String.class);
+                Root<OrderDetail> detail = sub.from(OrderDetail.class);
+                sub.select(detail.get("id").get("orderId"))
+                        .where(cb.equal(detail.get("order"), root),
+                                detail.get("variant").get("product").get("productId").in(productIds));
+                return cb.exists(sub);
+            });
+        }
         int page = filter.getPage() == null ? 0 : filter.getPage();
         int size = filter.getSize() == null ? 10 : filter.getSize();
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Sort.Direction direction = filter.getSortDirection() == null ? Sort.Direction.DESC : filter.getSortDirection();
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, "createdAt"));
         return orderRepository.findAll(spec, pageable).map(StaffOrderSummaryResponse::from);
     }
 
@@ -550,6 +567,62 @@ public class OrderService {
         cancelOrder(order, cleanReason, staff, compensationPromotion);
     }
 
+    /**
+     * Staff hủy nhiều đơn cùng lúc, kiểu tất cả hoặc không: khóa và kiểm tra hết trước,
+     * chỉ cần một đơn không hủy được thì báo lỗi kèm mã đơn và không hủy đơn nào.
+     * Trả về mã đơn -> mã bồi thường.
+     */
+    @Transactional
+    public Map<String, String> cancelStaffOrders(String staffId, List<String> orderIds, String reason) {
+        String cleanReason = validateCancelReason(reason);
+        // TreeSet: bỏ trùng và khóa theo thứ tự mã đơn để hai yêu cầu song song không deadlock
+        Set<String> ids = new TreeSet<>();
+        if (orderIds != null) {
+            for (String orderId : orderIds) {
+                if (orderId != null && !orderId.isBlank()) {
+                    ids.add(orderId.trim());
+                }
+            }
+        }
+        if (ids.isEmpty()) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Chưa chọn đơn hàng cần hủy");
+        }
+        if (ids.size() > 100) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Chỉ hủy tối đa 100 đơn mỗi lần");
+        }
+        User staff = userRepository.findById(staffId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Không tìm thấy nhân viên"));
+
+        List<Order> orders = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        for (String orderId : ids) {
+            Order order = orderRepository.findByOrderIdForUpdate(orderId).orElse(null);
+            if (order == null) {
+                errors.add(orderId + ": Không tìm thấy đơn hàng");
+                continue;
+            }
+            try {
+                checkCancellable(order);
+                orders.add(order);
+            } catch (AppException e) {
+                errors.add(orderId + ": " + e.getMessage());
+            }
+        }
+        if (!errors.isEmpty()) {
+            throw new AppException(HttpStatus.BAD_REQUEST,
+                    "Không hủy đơn nào. Các đơn không hủy được: " + String.join("; ", errors));
+        }
+
+        Map<String, String> result = new LinkedHashMap<>();
+        for (Order order : orders) {
+            Promotion compensationPromotion = promotionService.createCompensationPromotion(
+                    order.getCustomer(), order.getTotalAmount());
+            cancelOrder(order, cleanReason, staff, compensationPromotion);
+            result.put(order.getOrderId(), compensationPromotion.getCode());
+        }
+        return result;
+    }
+
     /** Một món đã kiểm tra và tính giá theo phần g, dùng chung cho xem trước và đặt hàng. */
     private record PricedItem(ColorStock colorStock, int quantity, Promotion productPromotion,
                               int salePrice, int productDiscount, int unitPrice, int subtotal,
@@ -883,6 +956,20 @@ public class OrderService {
         if (filter.getSize() != null && (filter.getSize() <= 0 || filter.getSize() > 100)) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Kích thước trang phải từ 1 đến 100");
         }
+
+        // Bỏ mã trống / trùng
+        Set<String> productIds = new LinkedHashSet<>();
+        if (filter.getProductIds() != null) {
+            for (String productId : filter.getProductIds()) {
+                if (productId != null && !productId.isBlank()) {
+                    productIds.add(productId.trim());
+                }
+            }
+        }
+        if (productIds.size() > 50) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Chỉ lọc tối đa 50 sản phẩm");
+        }
+        filter.setProductIds(new ArrayList<>(productIds));
     }
 
     private OrderPreviewResponse.Promotion toPromotionResponse(Promotion promotion, int discountAmount) {

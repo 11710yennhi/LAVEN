@@ -2,9 +2,8 @@ package iuh.fit.laven.controller;
 
 import iuh.fit.laven.dto.request.order.ReceiveReturnRequest;
 import iuh.fit.laven.dto.request.order.ReturnRequest;
+import iuh.fit.laven.dto.request.order.StaffReturnFilterRequest;
 import iuh.fit.laven.dto.response.order.ReturnDetailResponse;
-import iuh.fit.laven.model.enums.ReturnStatus;
-import iuh.fit.laven.model.enums.ReturnType;
 import iuh.fit.laven.security.CustomUserDetails;
 import iuh.fit.laven.service.ReturnService;
 import lombok.RequiredArgsConstructor;
@@ -44,13 +43,8 @@ public class ReturnController {
 
     /** Danh sách phiếu trả hàng / giao thất bại, mới nhất trước */
     @GetMapping("/staff/returns")
-    public Page<ReturnDetailResponse> getStaffReturns(
-            @RequestParam(required = false) ReturnStatus status,
-            @RequestParam(required = false) ReturnType type,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
-    ) {
-        return returnService.getStaffReturns(status, type, page, size);
+    public Page<ReturnDetailResponse> getStaffReturns(@ModelAttribute StaffReturnFilterRequest filter) {
+        return returnService.getStaffReturns(filter);
     }
 
     /** Chi tiết phiếu trả hàng của đơn */
