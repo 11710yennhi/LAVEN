@@ -8,8 +8,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -212,7 +214,8 @@ public class ReturnService {
         int page = filter.getPage() == null ? 0 : filter.getPage();
         int size = filter.getSize() == null ? 10 : filter.getSize();
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return returnRecordRepository.findAll(spec, pageable).map(this::toResponse);
+        Page<ReturnRecord> records = returnRecordRepository.findAll(spec, pageable);
+        return new PageImpl<>(toResponses(records.getContent()), pageable, records.getTotalElements());
     }
 
     @Transactional(readOnly = true)
@@ -540,12 +543,42 @@ public class ReturnService {
     }
 
     private ReturnDetailResponse toResponse(ReturnRecord record) {
+        return toResponses(List.of(record)).get(0);
+    }
+
+    /** Map nhiều phiếu: chi tiết đơn, món trả, bằng chứng của cả nhóm tải bằng 3 truy vấn IN (tránh N+1). */
+    private List<ReturnDetailResponse> toResponses(List<ReturnRecord> records) {
+        if (records.isEmpty()) {
+            return List.of();
+        }
+        List<String> orderIds = records.stream().map(ReturnRecord::getOrderId).toList();
+        Map<String, List<OrderDetail>> detailsByOrder = orderDetailRepository.findAllById_OrderIdIn(orderIds).stream()
+                .collect(Collectors.groupingBy(d -> d.getId().getOrderId()));
+        Map<String, List<ReturnItem>> itemsByOrder = returnItemRepository.findAllWithProductByOrderIds(orderIds).stream()
+                .collect(Collectors.groupingBy(i -> i.getId().getOrderId()));
+        Map<String, List<String>> evidenceByOrder = returnEvidenceRepository
+                .findAllByOrder_OrderIdInOrderByReturnEvidenceIdAsc(orderIds).stream()
+                .collect(Collectors.groupingBy(e -> e.getOrder().getOrderId(),
+                        Collectors.mapping(ReturnEvidence::getMediaUrl, Collectors.toList())));
+
+        List<ReturnDetailResponse> result = new ArrayList<>();
+        for (ReturnRecord record : records) {
+            String orderId = record.getOrderId();
+            result.add(toResponse(record,
+                    detailsByOrder.getOrDefault(orderId, List.of()),
+                    itemsByOrder.getOrDefault(orderId, List.of()),
+                    evidenceByOrder.getOrDefault(orderId, List.of())));
+        }
+        return result;
+    }
+
+    private ReturnDetailResponse toResponse(ReturnRecord record, List<OrderDetail> orderDetails,
+                                            List<ReturnItem> returnItems, List<String> evidenceUrls) {
         Order order = record.getOrder();
         String orderId = order.getOrderId();
-        List<OrderDetail> orderDetails = orderDetailRepository.findAllById_OrderId(orderId);
 
         List<ReturnDetailResponse.Item> items = new ArrayList<>();
-        for (ReturnItem item : returnItemRepository.findAllById_OrderId(orderId)) {
+        for (ReturnItem item : returnItems) {
             Integer unitPrice = orderDetails.stream()
                     .filter(d -> d.getVariant().getVariantId().equals(item.getVariant().getVariantId())
                             && d.getColor().getColorId().equals(item.getColor().getColorId()))
@@ -567,11 +600,6 @@ public class ReturnService {
                     .receivedColorId(item.getReceivedColor() == null ? null : item.getReceivedColor().getColorId())
                     .build());
         }
-
-        List<String> evidenceUrls = returnEvidenceRepository
-                .findAllByOrder_OrderIdOrderByReturnEvidenceIdAsc(orderId).stream()
-                .map(ReturnEvidence::getMediaUrl)
-                .toList();
 
         LocalDateTime sendBackDeadline = record.getStatus() == ReturnStatus.APPROVED
                 && record.getReturnReason() != ReturnReason.NOT_RECEIVED
