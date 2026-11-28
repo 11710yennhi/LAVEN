@@ -10,6 +10,7 @@ import iuh.fit.laven.model.Product;
 import iuh.fit.laven.repository.ColorStockRepository;
 import iuh.fit.laven.repository.ProductRepository;
 import iuh.fit.laven.repository.VariantRepository;
+import iuh.fit.laven.service.ProductImageService;
 import iuh.fit.laven.service.ProductService;
 import iuh.fit.laven.service.PromotionService;
 import iuh.fit.laven.service.PromotionService.ScopedPromotion;
@@ -48,6 +49,7 @@ public class SemanticSearchService {
     private final ColorStockRepository colorStockRepository;
     private final VariantRepository variantRepository;
     private final ProductService productService;
+    private final ProductImageService productImageService;
     private final PromotionService promotionService;
     private final ProductDocumentMapper mapper;
     private final ProductIndexService indexService;
@@ -58,6 +60,7 @@ public class SemanticSearchService {
                                  ColorStockRepository colorStockRepository,
                                  VariantRepository variantRepository,
                                  ProductService productService,
+                                 ProductImageService productImageService,
                                  PromotionService promotionService,
                                  ProductDocumentMapper mapper,
                                  ProductIndexService indexService,
@@ -67,6 +70,7 @@ public class SemanticSearchService {
         this.colorStockRepository = colorStockRepository;
         this.variantRepository = variantRepository;
         this.productService = productService;
+        this.productImageService = productImageService;
         this.promotionService = promotionService;
         this.mapper = mapper;
         this.indexService = indexService;
@@ -102,7 +106,7 @@ public class SemanticSearchService {
 
         // Lấy dư gấp 3 vì sau đó còn lọc khoảng giá và bỏ sản phẩm ngừng bán
         Map<String, Double> scores = vectorSearch(text, category, limit * 3, Set.of());
-        List<Item> items = toItems(scores, minPrice, maxPrice, limit);
+        List<Item> items = toItems(scores, minPrice, maxPrice, limit, Map.of());
         if (!items.isEmpty()) {
             return new SemanticSearchResponse(text, false, items);
         }
@@ -118,18 +122,22 @@ public class SemanticSearchService {
         // Dùng chính đoạn văn mô tả của sản phẩm làm câu truy vấn, loại bỏ chính nó
         String text = mapper.toDocument(product).getText();
         Map<String, Double> scores = vectorSearch(text, null, limit + 1, Set.of(product.getProductId()));
-        List<Item> items = toItems(scores, null, null, limit);
+        var covers = productImageService.findCoverUrls(List.copyOf(scores.keySet()));
+        List<Item> items = toItems(scores, null, null, limit, covers);
         if (!items.isEmpty()) {
             return items;
         }
 
         // Fallback: sản phẩm đang bán cùng danh mục
         List<ScopedPromotion> actives = promotionService.loadActiveProductPromotions();
-        return productService.search(null, product.getCategory().getCategoryId(),
+        var candidates = productService.search(null, product.getCategory().getCategoryId(),
                         null, null, null, null, null, null, false).stream()
                 .filter(p -> !p.getProductId().equals(product.getProductId()))
                 .limit(limit)
-                .map(p -> toItem(p, null, actives, null, null))
+                .toList();
+        var fallbackCovers = productImageService.findCoverUrls(candidates.stream().map(Product::getProductId).toList());
+        return candidates.stream()
+                .map(p -> toItem(p, null, actives, null, null, fallbackCovers.get(p.getProductId())))
                 .filter(Objects::nonNull)
                 .toList();
     }
@@ -165,7 +173,8 @@ public class SemanticSearchService {
     }
 
     /** Đọc lại sản phẩm từ DB, tính giá sau khuyến mãi, rồi mới lọc khoảng giá. */
-    private List<Item> toItems(Map<String, Double> scores, Integer minPrice, Integer maxPrice, int limit) {
+    private List<Item> toItems(Map<String, Double> scores, Integer minPrice, Integer maxPrice, int limit,
+                               Map<String, String> covers) {
         if (scores.isEmpty()) {
             return List.of();
         }
@@ -180,7 +189,7 @@ public class SemanticSearchService {
             if (product == null || !ProductIndexService.isSelling(product)) {
                 continue;
             }
-            Item item = toItem(product, entry.getValue(), actives, minPrice, maxPrice);
+            Item item = toItem(product, entry.getValue(), actives, minPrice, maxPrice, covers.get(product.getProductId()));
             if (item != null) {
                 items.add(item);
             }
@@ -195,7 +204,7 @@ public class SemanticSearchService {
                                      Integer minPrice, Integer maxPrice, int limit) {
         List<ScopedPromotion> actives = promotionService.loadActiveProductPromotions();
         return productService.search(query, categoryId, null, null, null, null, null, null, false).stream()
-                .map(p -> toItem(p, null, actives, minPrice, maxPrice))
+                .map(p -> toItem(p, null, actives, minPrice, maxPrice, null))
                 .filter(Objects::nonNull)
                 .limit(limit)
                 .toList();
@@ -207,7 +216,7 @@ public class SemanticSearchService {
      * Truy vấn nạp sẵn sản phẩm và danh mục để biến thể tính giá bán.
      */
     private Item toItem(Product product, Double score, List<ScopedPromotion> actives,
-                        Integer minPrice, Integer maxPrice) {
+                        Integer minPrice, Integer maxPrice, String imageUrl) {
         List<Integer> salePrices = new ArrayList<>();
         List<Integer> finalPrices = new ArrayList<>();
         variantRepository.findByProductProductId(product.getProductId()).stream()
@@ -233,7 +242,7 @@ public class SemanticSearchService {
         SalePriceRange range = new SalePriceRange(
                 salePrices.stream().min(Integer::compare).orElse(null),
                 salePrices.stream().max(Integer::compare).orElse(null));
-        return new Item(new ProductResponse(product, range),
+        return new Item(new ProductResponse(product, range, imageUrl),
                 finalPrices.stream().min(Integer::compare).orElseThrow(),
                 finalPrices.stream().max(Integer::compare).orElseThrow(),
                 stock, score);

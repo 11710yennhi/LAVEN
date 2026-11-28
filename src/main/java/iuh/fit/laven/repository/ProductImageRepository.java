@@ -6,9 +6,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface ProductImageRepository extends JpaRepository<ProductImage, String> {
     List<ProductImage> findByProductProductId(String productId);
+
+    Optional<ProductImage> findFirstByProductProductIdAndImageUrl(String productId, String imageUrl);
 
     List<ProductImage> findByProductProductIdOrderByProductImageIdAsc(String productId);
 

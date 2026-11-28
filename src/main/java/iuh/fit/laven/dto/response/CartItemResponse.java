@@ -17,6 +17,8 @@ public class CartItemResponse {
     private String colorName;
     private String productId;
     private String productName;
+    private String categoryName;
+    private String imageUrl;
     private String size;
     private int quantity;       // số lượng sau khi (nếu cần) bị cắt về mức cho phép
     private int originalPrice;  // salePrice

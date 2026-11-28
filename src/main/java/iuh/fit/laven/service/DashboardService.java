@@ -80,7 +80,8 @@ public class DashboardService {
 
         Revenue current = revenue.getLast();
         return new DashboardResponse(todo, new Today(daily.getOrders(), daily.getAmount(), newCustomers, daily.getAmount() - yesterday.getAmount()),
-            new Month(current.revenue(), current.orders()), provisional, revenue, byStatus, totalOrders,
+            new Month(current.revenue(), current.orders()),
+            provisional, revenue, byStatus, totalOrders,
             totalCustomers, lowStockCount, inventory.countActiveLowStock(0), lowStock, recent);
     }
 

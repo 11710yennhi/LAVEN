@@ -65,6 +65,11 @@ public class ProductImageController {
         return new MessageResponse("Đã cập nhật ảnh bìa");
     }
 
+    @DeleteMapping("/staff/products/{productId}/images/cover")
+    public void clearCover(@PathVariable String productId) {
+        productImageService.clearCover(productId);
+    }
+
     // ===== Các API tìm kiếm & đọc ảnh =====
 
     @GetMapping("/public/images")

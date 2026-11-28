@@ -82,16 +82,13 @@ public class BankPaymentService {
             return "Ngày giao dịch SePay không hợp lệ";
         }
         LocalDateTime now = LocalDateTime.now();
-        // Lưu giao dịch và đổi hai trạng thái trong cùng transaction của MariaDB.
+        // Lưu giao dịch và xác nhận thanh toán trong cùng transaction của MariaDB.
         bankTransactionRepository.save(new BankTransaction(transactionId, order,
                 transaction.getTransferAmount(), accountNumber,
                 content.strip().substring(0, Math.min(content.strip().length(), 1000)),
                 transaction.getGateway(), transactionDate, now));
         order.setPaymentStatus(PaymentStatus.PAID);
         order.setPaidAt(now);
-        order.setOrderStatus(OrderStatus.CONFIRMED);
-        order.setConfirmedAt(now);
-        order.setConfirmedBy(null); // Hệ thống xác nhận, không phải nhân viên.
         return "Đã xác nhận thanh toán đơn " + orderId;
     }
 
