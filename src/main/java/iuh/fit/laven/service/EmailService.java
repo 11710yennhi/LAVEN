@@ -55,6 +55,19 @@ public class EmailService {
         sendOrThrow(to, "Đặt lại mật khẩu LAVEN", content);
     }
 
+    /** Link xác thực đổi email, gửi tới email MỚI. token là JWT đổi email. Gửi lỗi thì ném AppException. */
+    public void sendEmailChangeVerification(String to, String token) {
+        String link = baseUrl + "/api/auth/verify-email-change?token=" + token;
+        String content = "Chào bạn,\n\n"
+                + "Chúng tôi nhận được yêu cầu đổi email đăng nhập tài khoản LAVEN sang địa chỉ này. "
+                + "Vui lòng bấm vào link dưới đây để xác nhận (có hiệu lực trong 30 phút):\n\n"
+                + link + "\n\n"
+                + "Sau khi xác nhận, bạn đăng nhập bằng email này. "
+                + "Nếu bạn không yêu cầu, hãy bỏ qua email này, email đăng nhập sẽ không thay đổi.\n\n"
+                + "LAVEN";
+        sendOrThrow(to, "Xác nhận đổi email LAVEN", content);
+    }
+
     /** Báo mã bồi thường khi Staff hủy đơn. Gửi lỗi chỉ ghi log để không làm hỏng việc hủy đơn. */
     public void sendCompensationEmail(String to, String code, LocalDate expiryDate) {
         String content = "Chào bạn,\n\n"
