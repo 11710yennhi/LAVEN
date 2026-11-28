@@ -1,7 +1,7 @@
 package iuh.fit.laven.controller;
 
-import iuh.fit.laven.dto.request.ProductImportRequest;
-import iuh.fit.laven.dto.response.ProductImportResponse;
+import iuh.fit.laven.dto.request.ProductImportValidationRequest;
+import iuh.fit.laven.dto.response.ProductImportResponse.Problem;
 import iuh.fit.laven.dto.response.ProductImportResponse.Preview;
 import iuh.fit.laven.service.ProductImportFileService;
 import iuh.fit.laven.service.ProductImportService;
@@ -13,6 +13,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/staff/products/import")
@@ -36,8 +38,8 @@ public class ProductImportController {
         return products.preview(parsed);
     }
 
-    @PostMapping
-    public ProductImportResponse confirm(@Valid @RequestBody ProductImportRequest request) {
-        return products.confirm(request);
+    @PostMapping(value = "/validate", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public List<Problem> validate(@Valid @RequestBody ProductImportValidationRequest request) {
+        return products.validateForImport(request.rows());
     }
 }

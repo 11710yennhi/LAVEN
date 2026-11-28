@@ -8,8 +8,6 @@ import iuh.fit.laven.repository.ColorStockRepository;
 import iuh.fit.laven.repository.ReturnRecordRepository;
 import iuh.fit.laven.repository.UserRepository;
 import iuh.fit.laven.model.enums.ReturnStatus;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.Tuple;
 import iuh.fit.laven.model.enums.UserRole;
 import org.springframework.data.domain.PageRequest;
 import iuh.fit.laven.model.OrderDetail;
@@ -24,7 +22,6 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.EnumMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -37,7 +34,6 @@ public class DashboardService {
     private final ReturnRecordRepository returns;
     private final ColorStockRepository inventory;
     private final ProductImageService productImages;
-    private final EntityManager entityManager;
 
     @Transactional(readOnly = true)
     public DashboardResponse getDashboard() {
@@ -84,7 +80,7 @@ public class DashboardService {
 
         Revenue current = revenue.getLast();
         return new DashboardResponse(todo, new Today(daily.getOrders(), daily.getAmount(), newCustomers, daily.getAmount() - yesterday.getAmount()),
-            new Month(current.revenue(), current.orders(), current.orders() == 0 ? null : estimateProfit(month, current.revenue())),
+            new Month(current.revenue(), current.orders()),
             provisional, revenue, byStatus, totalOrders,
             totalCustomers, lowStockCount, inventory.countActiveLowStock(0), lowStock, recent);
     }
@@ -93,58 +89,5 @@ public class DashboardService {
         var totals = orders.summarizeFinalizedOrders(month.atDay(1).atStartOfDay(),
             month.plusMonths(1).atDay(1).atStartOfDay());
         return new Revenue(month.toString(), "T" + month.getMonthValue(), totals.getAmount(), totals.getOrders());
-    }
-
-    private Long estimateProfit(YearMonth month, long revenue) {
-        var rows = entityManager.createQuery("""
-            SELECT o.orderId AS orderId, o.shippingFee AS outboundFee,
-                   CASE WHEN r.returnType = CUSTOMER_RETURN AND r.status = RECEIVED
-                        THEN r.returnShippingCost ELSE 0 END AS returnFee,
-                   d.quantity AS quantity, v.originalPrice AS unitCost, c.packagingCost AS packagingCost,
-                   CASE WHEN r.returnType = CUSTOMER_RETURN AND r.status = RECEIVED THEN
-                        CASE WHEN r.returnReason = WRONG_ITEM THEN COALESCE(ri.quantity, 0)
-                             WHEN r.returnReason IN (MANUFACTURER_DEFECT, NOT_RECEIVED) THEN 0
-                             ELSE COALESCE(ri.quantity - ri.damagedQuantity, 0) END
-                        ELSE 0 END AS recoveredQuantity,
-                   CASE WHEN r.returnType = CUSTOMER_RETURN AND r.status = RECEIVED AND r.returnReason = WRONG_ITEM
-                        THEN COALESCE(ri.damagedQuantity, 0) ELSE 0 END AS damagedWrongItems,
-                   receivedVariant.originalPrice AS wrongItemUnitCost
-            FROM Order o LEFT JOIN o.returnRecord r LEFT JOIN o.orderDetails d LEFT JOIN d.variant v
-            LEFT JOIN v.product p LEFT JOIN p.category c
-            LEFT JOIN ReturnItem ri ON ri.order = o AND ri.variant = d.variant AND ri.color = d.color
-            LEFT JOIN ri.receivedVariant receivedVariant
-            WHERE o.finalizedAt >= :start AND o.finalizedAt < :end
-              AND o.orderStatus IN (COMPLETED, RETURNED)
-            """, Tuple.class)
-            .setParameter("start", month.atDay(1).atStartOfDay())
-            .setParameter("end", month.plusMonths(1).atDay(1).atStartOfDay())
-            .getResultList();
-
-        var countedOrders = new HashSet<String>();
-        long profit = revenue;
-        for (Tuple row : rows) {
-            Integer outboundFee = row.get("outboundFee", Integer.class);
-            Integer returnFee = row.get("returnFee", Integer.class);
-            Integer quantity = row.get("quantity", Integer.class);
-            Integer unitCost = row.get("unitCost", Integer.class);
-            Integer packagingCost = row.get("packagingCost", Integer.class);
-            int recovered = row.get("recoveredQuantity", Integer.class);
-            int damagedWrongItems = row.get("damagedWrongItems", Integer.class);
-            Integer wrongItemUnitCost = row.get("wrongItemUnitCost", Integer.class);
-            if (outboundFee == null || returnFee == null || quantity == null || unitCost == null
-                    || packagingCost == null || (damagedWrongItems > 0 && wrongItemUnitCost == null)) {
-                return null;
-            }
-            // Cước chỉ tính một lần mỗi đơn. Đóng gói đã phát sinh cả với hàng trả.
-            if (countedOrders.add(row.get("orderId", String.class))) {
-                profit -= (long) outboundFee + returnFee;
-            }
-            profit -= (long) quantity * packagingCost;
-            profit -= (long) Math.max(0, quantity - recovered) * unitCost;
-            if (damagedWrongItems > 0) {
-                profit -= (long) damagedWrongItems * wrongItemUnitCost;
-            }
-        }
-        return profit;
     }
 }

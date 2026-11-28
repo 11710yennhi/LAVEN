@@ -8,6 +8,7 @@ import lombok.Getter;
 public class StaffProductResponse extends ProductResponse {
     private final Integer packagingCost;
     private final boolean status;
+    private final boolean comingSoon;
     private final String stopSellingReason;
     private final String coverImageId;
 
@@ -16,7 +17,12 @@ public class StaffProductResponse extends ProductResponse {
     }
 
     public StaffProductResponse(Product product, SalePriceRange priceRange, String imageUrl) {
+        this(product, priceRange, imageUrl, false);
+    }
+
+    public StaffProductResponse(Product product, SalePriceRange priceRange, String imageUrl, boolean comingSoon) {
         super(product, priceRange, imageUrl);
+        this.comingSoon = comingSoon;
         this.packagingCost = product.getCategory().getPackagingCost();
         this.status = product.isStatus();
         this.stopSellingReason = product.getStopSellingReason();

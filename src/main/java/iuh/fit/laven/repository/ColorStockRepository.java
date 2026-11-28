@@ -17,6 +17,12 @@ public interface ColorStockRepository extends JpaRepository<ColorStock, ColorSto
 
     int LOW_STOCK_THRESHOLD = 5;
 
+    @Query("""
+        SELECT DISTINCT s.variant.product.productId FROM ColorStock s
+        WHERE s.variant.product.productId IN :productIds
+        """)
+    java.util.Set<String> findProductIdsWithColors(@Param("productIds") List<String> productIds);
+
     interface ProductColor {
         String getProductId();
         String getColorId();

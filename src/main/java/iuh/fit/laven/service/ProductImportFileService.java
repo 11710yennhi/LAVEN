@@ -1,6 +1,6 @@
 package iuh.fit.laven.service;
 
-import iuh.fit.laven.dto.request.ProductImportRequest.Row;
+import iuh.fit.laven.dto.request.ProductImportValidationRequest.Row;
 import iuh.fit.laven.dto.response.ProductImportResponse.Preview;
 import iuh.fit.laven.dto.response.ProductImportResponse.Problem;
 import org.apache.commons.csv.CSVFormat;
